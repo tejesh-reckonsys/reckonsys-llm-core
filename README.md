@@ -1,6 +1,6 @@
 # reckonsys-llm-core
 
-A lightweight, provider-agnostic LLM client library with a strategy pattern. Currently supports Claude (Anthropic API and AWS Bedrock).
+A lightweight, provider-agnostic LLM client library with a strategy pattern. Currently supports Claude (Anthropic API and AWS Bedrock) and Ollama.
 
 ## Installation
 
@@ -10,6 +10,15 @@ pip install reckonsys-llm-core
 
 # With Claude support
 pip install "reckonsys-llm-core[claude]"
+
+# With Ollama support
+pip install "reckonsys-llm-core[ollama]"
+
+# With Jinja2 template support
+pip install "reckonsys-llm-core[templates]"
+
+# Everything
+pip install "reckonsys-llm-core[all]"
 ```
 
 ## Building a wheel
@@ -33,9 +42,14 @@ pip install dist/reckonsys_llm_core-*.whl
 # With Claude support
 pip install "dist/reckonsys_llm_core-*.whl[claude]"
 
+# With Ollama support
+pip install "dist/reckonsys_llm_core-*.whl[ollama]"
+
+# All providers
+pip install "dist/reckonsys_llm_core-*.whl[all]"
+
 # Using uv
-uv pip install dist/reckonsys_llm_core-*.whl
-uv pip install "dist/reckonsys_llm_core-*.whl[claude]"
+uv pip install "dist/reckonsys_llm_core-*.whl[all]"
 ```
 
 ## Quick start
@@ -105,6 +119,58 @@ response = client.query_structured(
 print(response.content)  # Person(name='Alice', age=30)
 ```
 
+### Ollama
+
+Requires a running [Ollama](https://ollama.com) server (defaults to `http://localhost:11434`).
+
+```python
+from reckonsys_llm_core import LLMClient, ChatMessage
+from reckonsys_llm_core.stratagies.ollama import OllamaLLMStrategy
+
+strategy = OllamaLLMStrategy(model="llama3.2")
+client = LLMClient(strategy)
+
+response = client.query(
+    messages=[ChatMessage(role="user", content="Hello!")],
+    system="You are a helpful assistant.",
+)
+print(response.content)
+```
+
+Custom host:
+
+```python
+strategy = OllamaLLMStrategy(model="llama3.2", host="http://my-server:11434")
+```
+
+#### Ollama structured output
+
+```python
+response = client.query_structured(
+    messages=[ChatMessage(role="user", content="Extract: Alice is 30 years old.")],
+    response_models=[Person],
+)
+print(response.content)  # Person(name='Alice', age=30)
+```
+
+- **Single response model** → uses Ollama's `format` parameter with a JSON schema (constrained decoding)
+- **Multiple response models** → uses tool-use (requires a model with tool support, e.g. `llama3.2`, `qwen2.5`)
+
+#### Ollama extended thinking
+
+Supported on models with reasoning capability (e.g. `deepseek-r1`, `qwen3`).
+
+```python
+from reckonsys_llm_core import ThinkingConfig
+
+response = client.query(
+    messages=[ChatMessage(role="user", content="Solve this step by step...")],
+    thinking=ThinkingConfig(enabled=True),
+)
+print(response.thinking)  # reasoning trace
+print(response.content)   # final answer
+```
+
 ### AWS Bedrock
 
 ```python
@@ -127,6 +193,34 @@ response = client.query(
 )
 print(response.thinking)  # reasoning trace
 print(response.content)   # final answer
+```
+
+## Prompt templates
+
+Install the `templates` extra, then call `configure_templates()` once at startup (e.g. in `settings.py` or `main.py`):
+
+```python
+from reckonsys_llm_core.templates import configure_templates, render_prompt
+
+configure_templates("/path/to/prompts")  # accepts any jinja2.Environment kwargs too
+```
+
+Then render anywhere:
+
+```python
+system = render_prompt("system.md.j2", {"role": "analyst"})
+user   = render_prompt("user.md.j2",   {"query": query})
+
+response = client.query(
+    messages=[ChatMessage(role="user", content=user)],
+    system=system,
+)
+```
+
+`configure_templates` accepts any extra `jinja2.Environment` kwargs:
+
+```python
+configure_templates("/path/to/prompts", trim_blocks=True, lstrip_blocks=True)
 ```
 
 ## Response fields
