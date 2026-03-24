@@ -16,6 +16,11 @@ from pydantic import Field, create_model
 
 from reckonsys_llm_core.types import ToolDefinition
 
+_SECTION_HEADER = re.compile(
+    r"^(Args|Arguments|Parameters|Returns|Raises|Yields|Example|Examples|Note|Notes)\s*:",
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Docstring parsing
@@ -56,15 +61,10 @@ def _parse_docstring(doc: str) -> tuple[str, dict[str, str]]:
             desc = " ".join(line.strip() for line in m.group(2).split("\n") if line.strip())
             param_descriptions[m.group(1)] = desc
 
-    # Summary: first paragraph before any blank line or known section header
-    _SECTION = re.compile(
-        r"^(Args|Arguments|Parameters|Returns|Raises|Yields|Example|Examples|Note|Notes)\s*:",
-        re.IGNORECASE,
-    )
     summary_lines: list[str] = []
     for line in doc.splitlines():
         stripped = line.strip()
-        if not stripped or _SECTION.match(stripped) or stripped.startswith(":"):
+        if not stripped or _SECTION_HEADER.match(stripped) or stripped.startswith(":"):
             break
         summary_lines.append(stripped)
 

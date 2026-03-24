@@ -7,6 +7,8 @@ from pydantic import BaseModel
 
 from anthropic import Anthropic, AnthropicBedrock, AsyncAnthropic, AsyncAnthropicBedrock
 from anthropic.types import (
+    CitationCharLocation,
+    CitationContentBlockLocation,
     ContentBlockParam,
     Message,
     MessageParam,
@@ -28,6 +30,8 @@ from reckonsys_llm_core.types import (
     BatchStatus,
     ChatContent,
     ChatMessage,
+    Citation,
+    DocumentContent,
     ImageContent,
     LLMParams,
     LLMResponse,
@@ -41,6 +45,7 @@ from reckonsys_llm_core.types import (
     ThinkingConfig,
     TokenUsage,
     ToolCall,
+    ToolChoice,
     ToolDefinition,
     ToolResultContent,
     ToolUseContent,
@@ -87,12 +92,17 @@ def _map_usage(message: Message) -> TokenUsage:
     )
 
 
-def _content_to_api(content: ChatContent) -> str | list[ContentBlockParam]:
+def _content_to_api(
+    content: ChatContent, cache: bool = False
+) -> str | list[ContentBlockParam]:
     """Convert ChatContent to Anthropic API content format.
 
     Images can be base64 or URL. Both are supported by Claude.
+    When cache=True a cache_control breakpoint is added to the last block.
     """
     if isinstance(content, str):
+        if cache:
+            return [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
         return content
 
     blocks: list[ContentBlockParam] = []
@@ -118,6 +128,16 @@ def _content_to_api(content: ChatContent) -> str | list[ContentBlockParam]:
                         },
                     }
                 )
+        elif isinstance(item, DocumentContent):
+            doc_block: dict[str, Any] = {
+                "type": "document",
+                "source": {"type": "text", "media_type": "text/plain", "data": item.text},
+            }
+            if item.title:
+                doc_block["title"] = item.title
+            if item.citations_enabled:
+                doc_block["citations"] = {"enabled": True}
+            blocks.append(doc_block)  # type: ignore[arg-type]
         elif isinstance(item, ToolUseContent):
             blocks.append(  # type: ignore[arg-type]
                 {
@@ -136,12 +156,19 @@ def _content_to_api(content: ChatContent) -> str | list[ContentBlockParam]:
             if item.is_error:
                 result_block["is_error"] = True
             blocks.append(result_block)  # type: ignore[arg-type]
+
+    if cache and blocks:
+        last = dict(blocks[-1])
+        last["cache_control"] = {"type": "ephemeral"}
+        blocks[-1] = last  # type: ignore[assignment]
+
     return blocks
 
 
 def _build_message_params(messages: list[ChatMessage]) -> list[MessageParam]:
     return [
-        MessageParam(role=m.role, content=_content_to_api(m.content)) for m in messages
+        MessageParam(role=m.role, content=_content_to_api(m.content, cache=m.cache))
+        for m in messages
     ]
 
 
@@ -214,6 +241,16 @@ def _build_tool_params(
     return tool_params, betas
 
 
+def _apply_tool_choice(kwargs: dict[str, Any], tool_choice: ToolChoice | None) -> None:
+    """Inject tool_choice into kwargs when tools are present."""
+    if tool_choice is None:
+        return
+    if tool_choice.type == "tool":
+        kwargs["tool_choice"] = {"type": "tool", "name": tool_choice.name}
+    else:
+        kwargs["tool_choice"] = {"type": tool_choice.type}
+
+
 def _build_tools(
     response_models: list[type[BaseModel]], strict: bool
 ) -> list[ToolParam]:
@@ -280,12 +317,32 @@ class _ClaudeBase:
         return tools, kwargs
 
     def _parse_response(self, res: Message) -> LLMResponse:
-        text, thinking = _extract_text_and_thinking(res)
-        tool_calls = [
-            ToolCall(id=block.id, name=block.name, input=dict(block.input))
-            for block in res.content
-            if isinstance(block, ToolUseBlock)
-        ]
+        text = ""
+        thinking: str | None = None
+        tool_calls: list[ToolCall] = []
+        citations: list[Citation] = []
+
+        for block in res.content:
+            if isinstance(block, TextBlock):
+                text = block.text
+                for c in block.citations or []:
+                    cited_text = getattr(c, "cited_text", "")
+                    if isinstance(c, (CitationCharLocation, CitationContentBlockLocation)):
+                        citations.append(Citation(
+                            cited_text=cited_text,
+                            document_title=c.document_title,
+                            document_index=c.document_index,
+                        ))
+                    else:
+                        url = getattr(c, "url", None)
+                        title = getattr(c, "title", None)
+                        if cited_text or url:
+                            citations.append(Citation(cited_text=cited_text, url=url, title=title))
+            elif isinstance(block, ThinkingBlock):
+                thinking = block.thinking
+            elif isinstance(block, ToolUseBlock):
+                tool_calls.append(ToolCall(id=block.id, name=block.name, input=dict(block.input)))
+
         return LLMResponse(
             content=text,
             usage=_map_usage(res),
@@ -295,6 +352,7 @@ class _ClaudeBase:
             else None,
             thinking=thinking,
             tool_calls=tool_calls,
+            citations=citations,
         )
 
     def _parse_json_output(
@@ -368,6 +426,7 @@ class ClaudeLLMStrategy(_ClaudeBase):
             kwargs["tools"] = tool_params
             if betas:
                 kwargs["betas"] = betas
+            _apply_tool_choice(kwargs, params.tool_choice)
         res = cast(Message, self.client.messages.create(**kwargs))
         return self._parse_response(res)
 
@@ -410,6 +469,7 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
             kwargs["tools"] = tool_params
             if betas:
                 kwargs["betas"] = betas
+            _apply_tool_choice(kwargs, params.tool_choice)
         res = cast(Message, await self.client.messages.create(**kwargs))
         return self._parse_response(res)
 

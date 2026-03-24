@@ -105,7 +105,64 @@ class ToolResultContent:
     type: Literal["tool_result"] = "tool_result"
 
 
+@dataclass
+class ToolChoice:
+    """
+    Controls how the model selects tools when tools are provided.
+
+    type="auto"  — model decides whether to call a tool (default)
+    type="any"   — must call at least one of the provided tools
+    type="tool"  — must call the specific tool named in `name`
+    type="none"  — not allowed to call any tool
+    """
+    type: Literal["auto", "any", "tool", "none"] = "auto"
+    name: str | None = None  # required when type == "tool"
+
+
+@dataclass
+class Citation:
+    """
+    A source citation returned in a response.
+
+    Web-search citations set `url` and `title`.
+    Document citations set `document_title` and `document_index`.
+    `cited_text` is always the exact passage that was cited.
+    """
+    cited_text: str
+    url: str | None = None              # web search
+    title: str | None = None            # web search source title
+    document_title: str | None = None   # DocumentContent citation
+    document_index: int | None = None   # which document in the message (0-indexed)
+
+
 # --- Content types ---
+
+@dataclass
+class DocumentContent:
+    """
+    A text document passed as a content block.
+
+    When citations_enabled=True (default), Claude can cite specific passages
+    from this document in its response. Cited passages appear in
+    LLMResponse.citations with document_title and document_index set.
+
+    Only supported by Claude (Anthropic API). Ignored by Ollama.
+
+    Example::
+
+        ChatMessage(
+            role="user",
+            content=[
+                DocumentContent(text="The sky is blue...", title="Science Notes"),
+                TextContent(text="What colour is the sky? Cite your source."),
+            ],
+        )
+    """
+    text: str
+    title: str | None = None
+    citations_enabled: bool = True
+    type: Literal["document"] = "document"
+
 
 @dataclass
 class TextContent:
@@ -132,13 +189,14 @@ class ImageContent:
 # A message's content is either a plain string or a list of content blocks.
 # ToolUseContent appears in assistant messages (tool calls made by the LLM).
 # ToolResultContent appears in user messages (results returned by your code).
-ChatContent = str | list[TextContent | ImageContent | ToolUseContent | ToolResultContent]
+ChatContent = str | list[TextContent | ImageContent | DocumentContent | ToolUseContent | ToolResultContent]
 
 
 @dataclass
 class ChatMessage:
     role: Literal["user", "assistant"]
     content: ChatContent
+    cache: bool = False  # add a cache breakpoint after this message (Claude only)
 
 
 # --- Request params ---
@@ -153,6 +211,7 @@ class LLMParams:
     stop: list[str] | None = None
     thinking: ThinkingConfig | None = None
     tools: list[ToolDefinition] = field(default_factory=list)
+    tool_choice: ToolChoice | None = None
 
 
 @dataclass
@@ -171,6 +230,7 @@ class LLMResponse:
     thinking: str | None = None
     attempts: int = 1
     tool_calls: list[ToolCall] = field(default_factory=list)
+    citations: list[Citation] = field(default_factory=list)
     provider_metadata: dict[str, Any] = field(default_factory=dict)
 
 

@@ -9,6 +9,7 @@ from reckonsys_llm_core.types import (
     BatchStatus,
     ChatContent,
     ChatMessage,
+    DocumentContent,
     ImageContent,
     LLMParams,
     LLMResponse,
@@ -22,7 +23,9 @@ from reckonsys_llm_core.types import (
     TextContent,
     ThinkingConfig,
     TokenUsage,
+    Citation,
     ToolCall,
+    ToolChoice,
     ToolDefinition,
     ToolResultContent,
     ToolUseContent,
@@ -44,6 +47,7 @@ __all__ = [
     "ChatContent",
     "TextContent",
     "ImageContent",
+    "DocumentContent",
     # Params
     "LLMParams",
     "LLMStructuredParams",
@@ -68,8 +72,10 @@ __all__ = [
     # Tools
     "ToolDefinition",
     "ToolCall",
+    "ToolChoice",
     "ToolUseContent",
     "ToolResultContent",
+    "Citation",
     # Function → tool helpers
     "tool_from_function",
     "from_tools",

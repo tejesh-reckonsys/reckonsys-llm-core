@@ -1,3 +1,4 @@
+import inspect
 from dataclasses import replace
 from typing import Any, AsyncIterator, Awaitable, Callable, Iterator
 
@@ -18,7 +19,7 @@ from reckonsys_llm_core.types import (
     StreamEvent,
     TextContent,
     ThinkingConfig,
-    ToolCall,
+    ToolChoice,
     ToolDefinition,
     ToolResultContent,
     ToolUseContent,
@@ -54,6 +55,7 @@ class LLMClient:
         stop: list[str] | None = None,
         thinking: ThinkingConfig | None = None,
         tools: list[ToolDefinition] | None = None,
+        tool_choice: ToolChoice | None = None,
     ) -> LLMResponse:
         params = LLMParams(
             messages=messages,
@@ -64,6 +66,7 @@ class LLMClient:
             stop=stop,
             thinking=thinking,
             tools=tools or [],
+            tool_choice=tool_choice,
         )
         return self.strategy.send_query(params)
 
@@ -215,6 +218,7 @@ class AsyncLLMClient:
         stop: list[str] | None = None,
         thinking: ThinkingConfig | None = None,
         tools: list[ToolDefinition] | None = None,
+        tool_choice: ToolChoice | None = None,
     ) -> LLMResponse:
         params = LLMParams(
             messages=messages,
@@ -225,6 +229,7 @@ class AsyncLLMClient:
             stop=stop,
             thinking=thinking,
             tools=tools or [],
+            tool_choice=tool_choice,
         )
         return await self.strategy.send_query(params)
 
@@ -342,8 +347,6 @@ class AsyncLLMClient:
 
         See LLMClient.run_agent for full documentation.
         """
-        import inspect
-
         current_messages = list(messages)
 
         for _ in range(max_iterations):

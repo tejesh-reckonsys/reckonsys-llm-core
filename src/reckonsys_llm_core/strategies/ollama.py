@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from reckonsys_llm_core._utils import parse_json_response, validate_dict_response
 from reckonsys_llm_core.types import (
     ChatMessage,
+    DocumentContent,
     ImageContent,
     LLMParams,
     LLMResponse,
@@ -88,6 +89,11 @@ def _message_to_ollama_messages(m: ChatMessage) -> list[dict[str, Any]]:
     for item in m.content:
         if isinstance(item, TextContent):
             texts.append(item.text)
+        elif isinstance(item, DocumentContent):
+            logger.warning(
+                "Ollama does not support DocumentContent — skipping. "
+                "Pass document text as a plain string or TextContent instead."
+            )
         elif isinstance(item, ImageContent):
             if item.is_url:
                 logger.warning(
@@ -165,15 +171,6 @@ class _OllamaBase:
         self.model = model
         self.host = host
         self.default_max_tokens = default_max_tokens
-
-    def _options(self, params: LLMParams) -> Options:
-        return _build_options(params, self.default_max_tokens)
-
-    def _messages(self, params: LLMParams) -> list[dict[str, Any]]:
-        return _build_messages(params)
-
-    def _think(self, params: LLMParams) -> bool | None:
-        return _resolve_think(params)
 
     def _parse_response(self, res: ChatResponse) -> LLMResponse:
         done_reason = getattr(res, "done_reason", None)
@@ -263,9 +260,9 @@ class OllamaLLMStrategy(_OllamaBase):
             kwargs["tools"] = _build_tool_defs(params.tools)
         res = self.client.chat(
             model=self.model,
-            messages=self._messages(params),
-            options=self._options(params),
-            think=self._think(params),
+            messages=_build_messages(params),
+            options=_build_options(params, self.default_max_tokens),
+            think=_resolve_think(params),
             **kwargs,
         )
         return self._parse_response(res)
@@ -274,10 +271,10 @@ class OllamaLLMStrategy(_OllamaBase):
         if len(params.response_models) == 1:
             res = self.client.chat(
                 model=self.model,
-                messages=self._messages(params),
-                options=self._options(params),
+                messages=_build_messages(params),
+                options=_build_options(params, self.default_max_tokens),
                 format=params.response_models[0].model_json_schema(),
-                think=self._think(params),
+                think=_resolve_think(params),
             )
             return self._parse_format_output(res, params.response_models[0])
 
@@ -286,10 +283,10 @@ class OllamaLLMStrategy(_OllamaBase):
         # command-r, granite3, phi4). Models without tool training return content=None.
         res = self.client.chat(
             model=self.model,
-            messages=self._messages(params),
-            options=self._options(params),
+            messages=_build_messages(params),
+            options=_build_options(params, self.default_max_tokens),
             tools=_build_tools(params.response_models),
-            think=self._think(params),
+            think=_resolve_think(params),
         )
         return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
 
@@ -315,9 +312,9 @@ class AsyncOllamaLLMStrategy(_OllamaBase):
             kwargs["tools"] = _build_tool_defs(params.tools)
         res = await self.client.chat(
             model=self.model,
-            messages=self._messages(params),
-            options=self._options(params),
-            think=self._think(params),
+            messages=_build_messages(params),
+            options=_build_options(params, self.default_max_tokens),
+            think=_resolve_think(params),
             **kwargs,
         )
         return self._parse_response(res)
@@ -326,19 +323,19 @@ class AsyncOllamaLLMStrategy(_OllamaBase):
         if len(params.response_models) == 1:
             res = await self.client.chat(
                 model=self.model,
-                messages=self._messages(params),
-                options=self._options(params),
+                messages=_build_messages(params),
+                options=_build_options(params, self.default_max_tokens),
                 format=params.response_models[0].model_json_schema(),
-                think=self._think(params),
+                think=_resolve_think(params),
             )
             return self._parse_format_output(res, params.response_models[0])
 
         res = await self.client.chat(
             model=self.model,
-            messages=self._messages(params),
-            options=self._options(params),
+            messages=_build_messages(params),
+            options=_build_options(params, self.default_max_tokens),
             tools=_build_tools(params.response_models),
-            think=self._think(params),
+            think=_resolve_think(params),
         )
         return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
 
@@ -350,10 +347,10 @@ class AsyncOllamaLLMStrategy(_OllamaBase):
 
         async for chunk in await self.client.chat(
             model=self.model,
-            messages=self._messages(params),
-            options=self._options(params),
+            messages=_build_messages(params),
+            options=_build_options(params, self.default_max_tokens),
             stream=True,
-            think=self._think(params),
+            think=_resolve_think(params),
         ):
             token = chunk.message.content or ""
             if token:
