@@ -34,6 +34,77 @@ class ThinkingConfig:
     reasoning_effort: Literal["low", "medium", "high"] | None = None  # for OpenAI
 
 
+# --- Tool types ---
+
+@dataclass
+class ToolDefinition:
+    """
+    A tool that can be passed to the LLM.
+
+    For regular custom tools set name, description, and input_schema (JSON schema dict).
+    For provider built-in tools (e.g. Claude web search) set raw_config instead —
+    the dict is passed directly to the API and the other fields are ignored.
+
+    Example — custom tool::
+
+        ToolDefinition(
+            name="get_weather",
+            description="Return the current weather for a city.",
+            input_schema={
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+            },
+        )
+
+    Example — Claude built-in web search::
+
+        ToolDefinition(
+            name="web_search",
+            raw_config={"type": "web_search_20250305", "name": "web_search"},
+        )
+    """
+    name: str
+    description: str = ""
+    input_schema: dict[str, Any] = field(default_factory=dict)
+    # When set, passed directly to the provider API (e.g. for built-in tools).
+    raw_config: dict[str, Any] | None = None
+
+
+@dataclass
+class ToolCall:
+    """A tool call returned by the LLM in a response."""
+    id: str            # provider-assigned ID (Anthropic) or synthetic (Ollama: "call_0")
+    name: str          # tool name
+    input: dict[str, Any]  # parsed arguments
+
+
+@dataclass
+class ToolUseContent:
+    """
+    An assistant message block representing a tool call.
+    Include this in the assistant ChatMessage you append to the conversation
+    after receiving a tool_use response, before sending tool results.
+    """
+    id: str
+    name: str
+    input: dict[str, Any]
+    type: Literal["tool_use"] = "tool_use"
+
+
+@dataclass
+class ToolResultContent:
+    """
+    A user message block carrying the result of a tool call.
+    Include these in the user ChatMessage you send after executing tools.
+    Set is_error=True if the tool raised an exception.
+    """
+    tool_use_id: str
+    content: str
+    is_error: bool = False
+    type: Literal["tool_result"] = "tool_result"
+
+
 # --- Content types ---
 
 @dataclass
@@ -58,8 +129,10 @@ class ImageContent:
     type: Literal["image"] = "image"
 
 
-# A message's content is either a plain string or a list of text/image blocks.
-ChatContent = str | list[TextContent | ImageContent]
+# A message's content is either a plain string or a list of content blocks.
+# ToolUseContent appears in assistant messages (tool calls made by the LLM).
+# ToolResultContent appears in user messages (results returned by your code).
+ChatContent = str | list[TextContent | ImageContent | ToolUseContent | ToolResultContent]
 
 
 @dataclass
@@ -79,6 +152,7 @@ class LLMParams:
     top_p: float | None = None
     stop: list[str] | None = None
     thinking: ThinkingConfig | None = None
+    tools: list[ToolDefinition] = field(default_factory=list)
 
 
 @dataclass
@@ -96,6 +170,7 @@ class LLMResponse:
     stop_reason: StopReason | None = None
     thinking: str | None = None
     attempts: int = 1
+    tool_calls: list[ToolCall] = field(default_factory=list)
     provider_metadata: dict[str, Any] = field(default_factory=dict)
 
 

@@ -18,7 +18,12 @@ from reckonsys_llm_core.types import (
     StreamEvent,
     StreamToken,
     TextContent,
+    ThinkingConfig,
     TokenUsage,
+    ToolCall,
+    ToolDefinition,
+    ToolResultContent,
+    ToolUseContent,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,15 +50,39 @@ def _build_options(params: LLMParams, default_max_tokens: int) -> Options:
     return Options(**opts)
 
 
-def _message_to_ollama(m: ChatMessage) -> dict[str, Any]:
-    """Convert a ChatMessage to Ollama's message dict format.
+def _message_to_ollama_messages(m: ChatMessage) -> list[dict[str, Any]]:
+    """
+    Convert a ChatMessage to one or more Ollama message dicts.
 
-    Ollama handles images via a separate `images` list (base64 strings only).
-    URL images are not supported — a warning is logged and the image is skipped.
+    Ollama differences from Anthropic:
+    - Tool results use role "tool" (one message per result), not "user" + tool_result blocks.
+    - Assistant tool calls use a "tool_calls" key, not content blocks.
+    - Images go in a separate "images" list (base64 only; URL images are skipped).
     """
     if isinstance(m.content, str):
-        return {"role": m.role, "content": m.content}
+        return [{"role": m.role, "content": m.content}]
 
+    # User message carrying tool results → emit one "tool" message per result.
+    if m.role == "user" and all(isinstance(item, ToolResultContent) for item in m.content):
+        return [
+            {"role": "tool", "content": item.content}
+            for item in m.content
+            if isinstance(item, ToolResultContent)
+        ]
+
+    # Assistant message that may contain text + tool_use blocks.
+    if m.role == "assistant":
+        text_parts = [item.text for item in m.content if isinstance(item, TextContent)]
+        tool_uses = [item for item in m.content if isinstance(item, ToolUseContent)]
+        msg: dict[str, Any] = {"role": "assistant", "content": " ".join(text_parts)}
+        if tool_uses:
+            msg["tool_calls"] = [
+                {"function": {"name": tc.name, "arguments": tc.input}}
+                for tc in tool_uses
+            ]
+        return [msg]
+
+    # Regular user message with text / images.
     texts: list[str] = []
     images: list[str] = []
     for item in m.content:
@@ -68,17 +97,18 @@ def _message_to_ollama(m: ChatMessage) -> dict[str, Any]:
             else:
                 images.append(item.source)
 
-    msg: dict[str, Any] = {"role": m.role, "content": "\n".join(texts)}
+    result: dict[str, Any] = {"role": m.role, "content": "\n".join(texts)}
     if images:
-        msg["images"] = images
-    return msg
+        result["images"] = images
+    return [result]
 
 
 def _build_messages(params: LLMParams) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
     if params.system:
         messages.append({"role": "system", "content": params.system})
-    messages.extend(_message_to_ollama(m) for m in params.messages)
+    for m in params.messages:
+        messages.extend(_message_to_ollama_messages(m))
     return messages
 
 
@@ -110,6 +140,22 @@ def _build_tools(response_models: list[type[BaseModel]]) -> list[dict[str, Any]]
     ]
 
 
+def _build_tool_defs(tools: list[ToolDefinition]) -> list[dict[str, Any]]:
+    """Convert ToolDefinition list to Ollama's tool format."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.input_schema,
+            },
+        }
+        for t in tools
+        if t.raw_config is None  # built-in tools are not supported by Ollama
+    ]
+
+
 # --- Shared base for sync and async Ollama strategies ---
 
 class _OllamaBase:
@@ -131,12 +177,21 @@ class _OllamaBase:
 
     def _parse_response(self, res: ChatResponse) -> LLMResponse:
         done_reason = getattr(res, "done_reason", None)
+        tool_calls = [
+            ToolCall(
+                id=f"call_{i}",          # Ollama provides no IDs
+                name=tc.function.name,
+                input=dict(tc.function.arguments),
+            )
+            for i, tc in enumerate(res.message.tool_calls or [])
+        ]
         return LLMResponse(
             content=res.message.content or "",
             usage=_map_usage(res),
             model=self.model,
             stop_reason=DONE_REASON_MAP.get(done_reason) if done_reason else None,
             thinking=res.message.thinking,
+            tool_calls=tool_calls,
         )
 
     def _parse_format_output(self, res: ChatResponse, response_model: type[BaseModel]) -> LLMStructuredResponse:
@@ -203,11 +258,15 @@ class OllamaLLMStrategy(_OllamaBase):
         return f"Ollama({self.model})"
 
     def send_query(self, params: LLMParams) -> LLMResponse:
+        kwargs: dict[str, Any] = {}
+        if params.tools:
+            kwargs["tools"] = _build_tool_defs(params.tools)
         res = self.client.chat(
             model=self.model,
             messages=self._messages(params),
             options=self._options(params),
             think=self._think(params),
+            **kwargs,
         )
         return self._parse_response(res)
 
@@ -251,11 +310,15 @@ class AsyncOllamaLLMStrategy(_OllamaBase):
         return f"AsyncOllama({self.model})"
 
     async def send_query(self, params: LLMParams) -> LLMResponse:
+        kwargs: dict[str, Any] = {}
+        if params.tools:
+            kwargs["tools"] = _build_tool_defs(params.tools)
         res = await self.client.chat(
             model=self.model,
             messages=self._messages(params),
             options=self._options(params),
             think=self._think(params),
+            **kwargs,
         )
         return self._parse_response(res)
 

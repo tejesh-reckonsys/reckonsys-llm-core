@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import AsyncIterator, Callable, Iterator
+from typing import Any, AsyncIterator, Awaitable, Callable, Iterator
 
 from pydantic import BaseModel
 
@@ -16,7 +16,12 @@ from reckonsys_llm_core.types import (
     RetryContext,
     StopReason,
     StreamEvent,
+    TextContent,
     ThinkingConfig,
+    ToolCall,
+    ToolDefinition,
+    ToolResultContent,
+    ToolUseContent,
 )
 
 _CORRECTION_TEMPLATE = """\
@@ -48,6 +53,7 @@ class LLMClient:
         top_p: float | None = None,
         stop: list[str] | None = None,
         thinking: ThinkingConfig | None = None,
+        tools: list[ToolDefinition] | None = None,
     ) -> LLMResponse:
         params = LLMParams(
             messages=messages,
@@ -57,6 +63,7 @@ class LLMClient:
             top_p=top_p,
             stop=stop,
             thinking=thinking,
+            tools=tools or [],
         )
         return self.strategy.send_query(params)
 
@@ -83,6 +90,81 @@ class LLMClient:
             response_models=response_models,
         )
         return self.strategy.send_structured_query(params)
+
+    def run_agent(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ToolDefinition],
+        tool_executor: Callable[[str, dict[str, Any]], str],
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+        stop: list[str] | None = None,
+        thinking: ThinkingConfig | None = None,
+        max_iterations: int = 10,
+    ) -> LLMResponse:
+        """
+        Run a tool-calling agent loop until the model produces a final text reply
+        or max_iterations is reached.
+
+        On each iteration:
+        1. Call the model with the current messages and tool definitions.
+        2. If stop_reason is tool_use: execute each requested tool, append the
+           assistant message and tool results, and call the model again.
+        3. If stop_reason is anything else: return the response.
+
+        If tool_executor raises, the exception is captured and sent back to the
+        model as an error result so it can recover gracefully.
+
+        Args:
+            messages:       Initial conversation messages.
+            tools:          Tool definitions available to the model.
+            tool_executor:  Called with (tool_name, tool_input) for each tool call.
+                            Must return the result as a string.
+            max_iterations: Safety limit on the number of model calls.
+        """
+        current_messages = list(messages)
+
+        for _ in range(max_iterations):
+            response = self.query(
+                messages=current_messages,
+                tools=tools,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                stop=stop,
+                thinking=thinking,
+            )
+
+            if response.stop_reason != StopReason.TOOL_USE:
+                return response
+
+            # Reconstruct the full assistant message (text + tool_use blocks)
+            assistant_content: list = []
+            if response.content:
+                assistant_content.append(TextContent(text=response.content))
+            for tc in response.tool_calls:
+                assistant_content.append(ToolUseContent(id=tc.id, name=tc.name, input=tc.input))
+            current_messages.append(ChatMessage(role="assistant", content=assistant_content))
+
+            # Execute tools and collect results
+            tool_results: list[ToolResultContent] = []
+            for tc in response.tool_calls:
+                try:
+                    result = tool_executor(tc.name, tc.input)
+                    tool_results.append(ToolResultContent(tool_use_id=tc.id, content=result))
+                except Exception as exc:
+                    tool_results.append(
+                        ToolResultContent(tool_use_id=tc.id, content=str(exc), is_error=True)
+                    )
+            current_messages.append(ChatMessage(role="user", content=tool_results))  # type: ignore[arg-type]
+
+        raise RuntimeError(
+            f"Agent did not reach a final response within {max_iterations} iterations"
+        )
 
 
 class AsyncLLMClient:
@@ -132,6 +214,7 @@ class AsyncLLMClient:
         top_p: float | None = None,
         stop: list[str] | None = None,
         thinking: ThinkingConfig | None = None,
+        tools: list[ToolDefinition] | None = None,
     ) -> LLMResponse:
         params = LLMParams(
             messages=messages,
@@ -141,6 +224,7 @@ class AsyncLLMClient:
             top_p=top_p,
             stop=stop,
             thinking=thinking,
+            tools=tools or [],
         )
         return await self.strategy.send_query(params)
 
@@ -238,6 +322,67 @@ class AsyncLLMClient:
             ]
 
         return result  # type: ignore[return-value]  # always set after first iteration
+
+    async def arun_agent(
+        self,
+        messages: list[ChatMessage],
+        tools: list[ToolDefinition],
+        tool_executor: Callable[[str, dict[str, Any]], str | Awaitable[str]],
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+        stop: list[str] | None = None,
+        thinking: ThinkingConfig | None = None,
+        max_iterations: int = 10,
+    ) -> LLMResponse:
+        """
+        Async version of run_agent. tool_executor may be sync or async.
+
+        See LLMClient.run_agent for full documentation.
+        """
+        import inspect
+
+        current_messages = list(messages)
+
+        for _ in range(max_iterations):
+            response = await self.query(
+                messages=current_messages,
+                tools=tools,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                stop=stop,
+                thinking=thinking,
+            )
+
+            if response.stop_reason != StopReason.TOOL_USE:
+                return response
+
+            assistant_content: list = []
+            if response.content:
+                assistant_content.append(TextContent(text=response.content))
+            for tc in response.tool_calls:
+                assistant_content.append(ToolUseContent(id=tc.id, name=tc.name, input=tc.input))
+            current_messages.append(ChatMessage(role="assistant", content=assistant_content))
+
+            tool_results: list[ToolResultContent] = []
+            for tc in response.tool_calls:
+                try:
+                    maybe_coro = tool_executor(tc.name, tc.input)
+                    result = await maybe_coro if inspect.isawaitable(maybe_coro) else maybe_coro
+                    tool_results.append(ToolResultContent(tool_use_id=tc.id, content=str(result)))
+                except Exception as exc:
+                    tool_results.append(
+                        ToolResultContent(tool_use_id=tc.id, content=str(exc), is_error=True)
+                    )
+            current_messages.append(ChatMessage(role="user", content=tool_results))  # type: ignore[arg-type]
+
+        raise RuntimeError(
+            f"Agent did not reach a final response within {max_iterations} iterations"
+        )
 
 
 class BatchLLMClient:

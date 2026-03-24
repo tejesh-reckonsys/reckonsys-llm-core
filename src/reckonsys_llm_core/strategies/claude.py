@@ -38,7 +38,12 @@ from reckonsys_llm_core.types import (
     StreamEvent,
     StreamToken,
     TextContent,
+    ThinkingConfig,
     TokenUsage,
+    ToolCall,
+    ToolDefinition,
+    ToolResultContent,
+    ToolUseContent,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,6 +118,24 @@ def _content_to_api(content: ChatContent) -> str | list[ContentBlockParam]:
                         },
                     }
                 )
+        elif isinstance(item, ToolUseContent):
+            blocks.append(  # type: ignore[arg-type]
+                {
+                    "type": "tool_use",
+                    "id": item.id,
+                    "name": item.name,
+                    "input": item.input,
+                }
+            )
+        elif isinstance(item, ToolResultContent):
+            result_block: dict[str, Any] = {
+                "type": "tool_result",
+                "tool_use_id": item.tool_use_id,
+                "content": item.content,
+            }
+            if item.is_error:
+                result_block["is_error"] = True
+            blocks.append(result_block)  # type: ignore[arg-type]
     return blocks
 
 
@@ -161,6 +184,34 @@ def _extract_text_and_thinking(message: Message) -> tuple[str, str | None]:
         elif isinstance(block, ThinkingBlock):
             thinking_text = block.thinking
     return text, thinking_text
+
+
+def _build_tool_params(
+    tools: list[ToolDefinition],
+) -> tuple[list[Any], list[str]]:
+    """
+    Convert ToolDefinition list to (api_tool_params, required_betas).
+
+    Built-in tools (raw_config set) are passed as-is; betas are auto-detected.
+    Custom tools are converted to ToolParam.
+    """
+    tool_params: list[Any] = []
+    betas: list[str] = []
+    for t in tools:
+        if t.raw_config is not None:
+            tool_params.append(t.raw_config)
+            if t.raw_config.get("type") == "web_search_20250305":
+                if "web-search-2025-03-05" not in betas:
+                    betas.append("web-search-2025-03-05")
+        else:
+            tool_params.append(
+                ToolParam(
+                    name=t.name,
+                    description=t.description,
+                    input_schema=t.input_schema,
+                )
+            )
+    return tool_params, betas
 
 
 def _build_tools(
@@ -230,6 +281,11 @@ class _ClaudeBase:
 
     def _parse_response(self, res: Message) -> LLMResponse:
         text, thinking = _extract_text_and_thinking(res)
+        tool_calls = [
+            ToolCall(id=block.id, name=block.name, input=dict(block.input))
+            for block in res.content
+            if isinstance(block, ToolUseBlock)
+        ]
         return LLMResponse(
             content=text,
             usage=_map_usage(res),
@@ -238,6 +294,7 @@ class _ClaudeBase:
             if res.stop_reason
             else None,
             thinking=thinking,
+            tool_calls=tool_calls,
         )
 
     def _parse_json_output(
@@ -305,7 +362,13 @@ class ClaudeLLMStrategy(_ClaudeBase):
         return f"Claude({self.model})"
 
     def send_query(self, params: LLMParams) -> LLMResponse:
-        res = cast(Message, self.client.messages.create(**self._kwargs(params)))
+        kwargs = self._kwargs(params)
+        if params.tools:
+            tool_params, betas = _build_tool_params(params.tools)
+            kwargs["tools"] = tool_params
+            if betas:
+                kwargs["betas"] = betas
+        res = cast(Message, self.client.messages.create(**kwargs))
         return self._parse_response(res)
 
     def send_structured_query(
@@ -341,7 +404,13 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
         return f"AsyncClaude({self.model})"
 
     async def send_query(self, params: LLMParams) -> LLMResponse:
-        res = cast(Message, await self.client.messages.create(**self._kwargs(params)))
+        kwargs = self._kwargs(params)
+        if params.tools:
+            tool_params, betas = _build_tool_params(params.tools)
+            kwargs["tools"] = tool_params
+            if betas:
+                kwargs["betas"] = betas
+        res = cast(Message, await self.client.messages.create(**kwargs))
         return self._parse_response(res)
 
     async def send_structured_query(
@@ -534,6 +603,23 @@ class AsyncClaudeBatchStrategy:
         """Stream results one by one — avoids loading all results into memory."""
         async for result in await self.client.messages.batches.results(batch_id):
             yield _map_batch_result(result)
+
+
+# --- Convenience constants ---
+
+WEB_SEARCH_TOOL = ToolDefinition(
+    name="web_search",
+    raw_config={"type": "web_search_20250305", "name": "web_search"},
+)
+"""
+Claude's built-in web search tool. Pass in LLMParams.tools to give Claude
+live web access. Requires an Anthropic account plan that includes web search.
+
+    response = client.query(
+        messages=[ChatMessage(role="user", content="Latest Python release?")],
+        tools=[WEB_SEARCH_TOOL],
+    )
+"""
 
 
 # --- Factory helpers ---
