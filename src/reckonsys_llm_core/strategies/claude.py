@@ -502,9 +502,24 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
                 yield StreamToken(token=text)
 
             final = await stream.get_final_message()
+            citations: list[Citation] = []
             for block in final.content:
                 if isinstance(block, ThinkingBlock):
                     thinking_text = block.thinking
+                elif isinstance(block, TextBlock):
+                    for c in block.citations or []:
+                        cited_text = getattr(c, "cited_text", "")
+                        if isinstance(c, (CitationCharLocation, CitationContentBlockLocation)):
+                            citations.append(Citation(
+                                cited_text=cited_text,
+                                document_title=c.document_title,
+                                document_index=c.document_index,
+                            ))
+                        else:
+                            url = getattr(c, "url", None)
+                            title = getattr(c, "title", None)
+                            if cited_text or url:
+                                citations.append(Citation(cited_text=cited_text, url=url, title=title))
 
         yield StreamDone(
             full_content=full_content,
@@ -514,6 +529,7 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
             if final.stop_reason
             else None,
             thinking=thinking_text,
+            citations=citations,
         )
 
 

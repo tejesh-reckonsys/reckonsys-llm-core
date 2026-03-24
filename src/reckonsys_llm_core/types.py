@@ -264,6 +264,7 @@ class StreamDone:
     model: str
     stop_reason: StopReason | None = None
     thinking: str | None = None
+    citations: list[Citation] = field(default_factory=list)
     is_done: Literal[True] = True
     provider_metadata: dict[str, Any] = field(default_factory=dict)
 
