@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from anthropic import Anthropic, AnthropicBedrock, AsyncAnthropic, AsyncAnthropicBedrock
 from anthropic.types import (
+    ContentBlockParam,
     Message,
     MessageParam,
     TextBlock,
@@ -54,6 +55,7 @@ DEFAULT_MAX_TOKENS = 8000
 
 # --- Module-level helpers ---
 
+
 def _strict_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Recursively ensure all object types have additionalProperties: false."""
     schema = dict(schema)
@@ -80,7 +82,7 @@ def _map_usage(message: Message) -> TokenUsage:
     )
 
 
-def _content_to_api(content: ChatContent) -> str | list[dict[str, Any]]:
+def _content_to_api(content: ChatContent) -> str | list[ContentBlockParam]:
     """Convert ChatContent to Anthropic API content format.
 
     Images can be base64 or URL. Both are supported by Claude.
@@ -88,32 +90,35 @@ def _content_to_api(content: ChatContent) -> str | list[dict[str, Any]]:
     if isinstance(content, str):
         return content
 
-    blocks: list[dict[str, Any]] = []
+    blocks: list[ContentBlockParam] = []
     for item in content:
         if isinstance(item, TextContent):
             blocks.append({"type": "text", "text": item.text})
         elif isinstance(item, ImageContent):
             if item.is_url:
-                blocks.append({
-                    "type": "image",
-                    "source": {"type": "url", "url": item.source},
-                })
+                blocks.append(
+                    {
+                        "type": "image",
+                        "source": {"type": "url", "url": item.source},
+                    }
+                )
             else:
-                blocks.append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": item.media_type,
-                        "data": item.source,
-                    },
-                })
+                blocks.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": item.media_type,
+                            "data": item.source,
+                        },
+                    }
+                )
     return blocks
 
 
 def _build_message_params(messages: list[ChatMessage]) -> list[MessageParam]:
     return [
-        MessageParam(role=m.role, content=_content_to_api(m.content))
-        for m in messages
+        MessageParam(role=m.role, content=_content_to_api(m.content)) for m in messages
     ]
 
 
@@ -129,7 +134,9 @@ def _build_kwargs(
     }
     if params.system:
         kwargs["system"] = [
-            TextBlockParam(text=params.system, type="text", cache_control={"type": "ephemeral"})
+            TextBlockParam(
+                text=params.system, type="text", cache_control={"type": "ephemeral"}
+            )
         ]
     if params.temperature is not None:
         kwargs["temperature"] = params.temperature
@@ -138,7 +145,10 @@ def _build_kwargs(
     if params.stop:
         kwargs["stop_sequences"] = params.stop
     if params.thinking and params.thinking.enabled:
-        kwargs["thinking"] = {"type": "enabled", "budget_tokens": params.thinking.budget_tokens}
+        kwargs["thinking"] = {
+            "type": "enabled",
+            "budget_tokens": params.thinking.budget_tokens,
+        }
     return kwargs
 
 
@@ -153,20 +163,25 @@ def _extract_text_and_thinking(message: Message) -> tuple[str, str | None]:
     return text, thinking_text
 
 
-def _build_tools(response_models: list[type[BaseModel]], strict: bool) -> list[ToolParam]:
+def _build_tools(
+    response_models: list[type[BaseModel]], strict: bool
+) -> list[ToolParam]:
     # strict=True applies additionalProperties:false to the schema
     # (no "strict" key — that's OpenAI-specific and has no effect on Anthropic)
     return [
         ToolParam(
             name=m.__name__,
             description=f"Respond using the {m.__name__} schema.",
-            input_schema=_strict_schema(m.model_json_schema()) if strict else m.model_json_schema(),
+            input_schema=_strict_schema(m.model_json_schema())
+            if strict
+            else m.model_json_schema(),
         )
         for m in response_models
     ]
 
 
 # --- Shared base for sync and async Claude strategies ---
+
 
 class _ClaudeBase:
     """Holds all config and response-parsing logic shared between sync and async."""
@@ -219,7 +234,9 @@ class _ClaudeBase:
             content=text,
             usage=_map_usage(res),
             model=self.model,
-            stop_reason=STOP_REASON_MAP.get(res.stop_reason) if res.stop_reason else None,
+            stop_reason=STOP_REASON_MAP.get(res.stop_reason)
+            if res.stop_reason
+            else None,
             thinking=thinking,
         )
 
@@ -253,7 +270,9 @@ class _ClaudeBase:
         for block in res.content:
             if isinstance(block, ToolUseBlock) and block.name in response_types:
                 raw_content = json.dumps(block.input)
-                content, error = validate_dict_response(block.input, response_types[block.name])
+                content, error = validate_dict_response(
+                    block.input, response_types[block.name]
+                )
                 if error:
                     stop_reason = StopReason.ERROR
                 break
@@ -270,6 +289,7 @@ class _ClaudeBase:
 
 
 # --- Sync strategy ---
+
 
 class ClaudeLLMStrategy(_ClaudeBase):
     def __init__(
@@ -288,17 +308,24 @@ class ClaudeLLMStrategy(_ClaudeBase):
         res = cast(Message, self.client.messages.create(**self._kwargs(params)))
         return self._parse_response(res)
 
-    def send_structured_query(self, params: LLMStructuredParams) -> LLMStructuredResponse:
+    def send_structured_query(
+        self, params: LLMStructuredParams
+    ) -> LLMStructuredResponse:
         if self.strict and len(params.response_models) == 1:
-            res = cast(Message, self.client.messages.create(**self._json_output_kwargs(params)))
+            res = cast(
+                Message, self.client.messages.create(**self._json_output_kwargs(params))
+            )
             return self._parse_json_output(res, params.response_models[0])
 
         tools, kwargs = self._tools_kwargs(params)
         res = cast(Message, self.client.messages.create(tools=tools, **kwargs))
-        return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
+        return self._parse_tools_output(
+            res, {m.__name__: m for m in params.response_models}
+        )
 
 
 # --- Async strategy ---
+
 
 class AsyncClaudeLLMStrategy(_ClaudeBase):
     def __init__(
@@ -317,16 +344,25 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
         res = cast(Message, await self.client.messages.create(**self._kwargs(params)))
         return self._parse_response(res)
 
-    async def send_structured_query(self, params: LLMStructuredParams) -> LLMStructuredResponse:
+    async def send_structured_query(
+        self, params: LLMStructuredParams
+    ) -> LLMStructuredResponse:
         if self.strict and len(params.response_models) == 1:
-            res = cast(Message, await self.client.messages.create(**self._json_output_kwargs(params)))
+            res = cast(
+                Message,
+                await self.client.messages.create(**self._json_output_kwargs(params)),
+            )
             return self._parse_json_output(res, params.response_models[0])
 
         tools, kwargs = self._tools_kwargs(params)
         res = cast(Message, await self.client.messages.create(tools=tools, **kwargs))
-        return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
+        return self._parse_tools_output(
+            res, {m.__name__: m for m in params.response_models}
+        )
 
-    async def stream_query(self, params: LLMParams) -> AsyncGenerator[StreamEvent, None]:
+    async def stream_query(
+        self, params: LLMParams
+    ) -> AsyncGenerator[StreamEvent, None]:
         """Yields StreamToken per token, then a final StreamDone with full metadata."""
         full_content = ""
         thinking_text = None
@@ -345,7 +381,9 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
             full_content=full_content,
             usage=_map_usage(final),
             model=self.model,
-            stop_reason=STOP_REASON_MAP.get(final.stop_reason) if final.stop_reason else None,
+            stop_reason=STOP_REASON_MAP.get(final.stop_reason)
+            if final.stop_reason
+            else None,
             thinking=thinking_text,
         )
 
@@ -354,8 +392,8 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
 
 _BATCH_STATUS_MAP: dict[str, BatchStatus] = {
     "in_progress": BatchStatus.IN_PROGRESS,
-    "canceling":   BatchStatus.CANCELING,
-    "ended":       BatchStatus.ENDED,
+    "canceling": BatchStatus.CANCELING,
+    "ended": BatchStatus.ENDED,
 }
 
 
@@ -433,7 +471,9 @@ def _map_batch_result(res: Any) -> BatchResult:
                 content=text,
                 usage=_map_usage(msg),
                 model=msg.model,
-                stop_reason=STOP_REASON_MAP.get(msg.stop_reason) if msg.stop_reason else None,
+                stop_reason=STOP_REASON_MAP.get(msg.stop_reason)
+                if msg.stop_reason
+                else None,
                 thinking=thinking,
             ),
         )
@@ -497,6 +537,7 @@ class AsyncClaudeBatchStrategy:
 
 
 # --- Factory helpers ---
+
 
 def create_claude_client(**kwargs: Any) -> Anthropic:
     return Anthropic(max_retries=1, **kwargs)
