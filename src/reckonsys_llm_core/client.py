@@ -39,10 +39,24 @@ Please respond again with valid JSON that exactly matches the required schema.\
 
 
 class LLMClient:
-    """Synchronous client — for scripts, CLI tools, and eval pipelines."""
+    """Synchronous client — for scripts, CLI tools, and eval pipelines.
 
-    def __init__(self, strategy: LLMStrategy):
+    Args:
+        strategy:    An LLMStrategy implementation (Claude, Ollama, …).
+        max_retries: Number of correction attempts after the first structured
+                     query failure. Total calls = max_retries + 1. Default: 2.
+        on_retry:    Optional callback fired on each failed attempt.
+    """
+
+    def __init__(
+        self,
+        strategy: LLMStrategy,
+        max_retries: int = 2,
+        on_retry: Callable[[RetryContext], None] | None = None,
+    ):
         self.strategy = strategy
+        self.max_retries = max_retries
+        self.on_retry = on_retry
 
     def query(
         self,
@@ -82,6 +96,15 @@ class LLMClient:
         stop: list[str] | None = None,
         thinking: ThinkingConfig | None = None,
     ) -> LLMStructuredResponse:
+        """Structured query with automatic error-feedback retry.
+
+        On each validation failure:
+        1. The LLM's raw output is appended as an assistant message.
+        2. A correction user message is appended with the exact error.
+        3. The strategy is called again with this extended conversation.
+
+        The original messages list is never mutated.
+        """
         params = LLMStructuredParams(
             messages=messages,
             system=system,
@@ -92,7 +115,68 @@ class LLMClient:
             thinking=thinking,
             response_models=response_models,
         )
-        return self.strategy.send_structured_query(params)
+
+        current_messages = list(params.messages)
+        result: LLMStructuredResponse | None = None
+
+        for attempt in range(1, self.max_retries + 2):  # +2 → first attempt + N retries
+            current_params = replace(params, messages=current_messages)
+            result = self.strategy.send_structured_query(current_params)
+            result.attempts = attempt
+
+            if result.stop_reason != StopReason.ERROR:
+                return result
+
+            if attempt > self.max_retries:
+                break
+
+            if self.on_retry:
+                self.on_retry(
+                    RetryContext(
+                        attempt=attempt,
+                        error=result.error or "unknown validation error",
+                        raw_content=result.raw_content,
+                        params=current_params,
+                    )
+                )
+
+            correction = _CORRECTION_TEMPLATE.format(
+                raw_content=result.raw_content or "(empty)",
+                error=result.error or "unknown validation error",
+            )
+            current_messages = current_messages + [
+                ChatMessage(role="assistant", content=result.raw_content or ""),
+                ChatMessage(role="user", content=correction),
+            ]
+
+        return result  # type: ignore[return-value]  # always set after first iteration
+
+    def stream_query(
+        self,
+        messages: list[ChatMessage],
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+        stop: list[str] | None = None,
+        thinking: ThinkingConfig | None = None,
+    ) -> Iterator[StreamEvent]:
+        """Returns a generator — use with a regular for loop.
+
+        No retry: streaming is incompatible with retry since tokens are already
+        forwarded to the caller before the response is complete.
+        """
+        params = LLMParams(
+            messages=messages,
+            system=system,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            stop=stop,
+            thinking=thinking,
+        )
+        return self.strategy.stream_query(params)
 
     def run_agent(
         self,

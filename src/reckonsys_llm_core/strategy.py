@@ -21,6 +21,8 @@ class LLMStrategy(Protocol):
         self, params: LLMStructuredParams
     ) -> LLMStructuredResponse: ...
 
+    def stream_query(self, params: LLMParams) -> Iterator[StreamEvent]: ...
+
 
 class AsyncLLMStrategy(Protocol):
     """

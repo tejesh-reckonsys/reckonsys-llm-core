@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Generator
 
 from ollama import AsyncClient, ChatResponse, Client, Options
 from pydantic import BaseModel
@@ -289,6 +289,38 @@ class OllamaLLMStrategy(_OllamaBase):
             think=_resolve_think(params),
         )
         return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
+
+    def stream_query(self, params: LLMParams) -> Generator[StreamEvent, None, None]:
+        """Yields StreamToken per token, then a final StreamDone with full metadata."""
+        full_content = ""
+        thinking_text = ""
+        last_chunk = None
+
+        for chunk in self.client.chat(
+            model=self.model,
+            messages=_build_messages(params),
+            options=_build_options(params, self.default_max_tokens),
+            stream=True,
+            think=_resolve_think(params),
+        ):
+            token = chunk.message.content or ""
+            if token:
+                full_content += token
+                yield StreamToken(token=token)
+
+            if chunk.message.thinking:
+                thinking_text += chunk.message.thinking
+
+            last_chunk = chunk
+
+        done_reason = getattr(last_chunk, "done_reason", None) if last_chunk else None
+        yield StreamDone(
+            full_content=full_content,
+            usage=_map_usage(last_chunk) if last_chunk else TokenUsage(),
+            model=self.model,
+            stop_reason=DONE_REASON_MAP.get(done_reason) if done_reason else None,
+            thinking=thinking_text or None,
+        )
 
 
 # --- Async strategy ---

@@ -1,0 +1,397 @@
+# reckonsys-llm-core
+
+Provider-agnostic LLM client library for Python 3.12+. Wraps Claude (Anthropic API + AWS Bedrock) and Ollama behind a unified interface with full sync/async support, structured output, streaming, tool calling, and batch processing.
+
+## Install
+
+```bash
+pip install "reckonsys-llm-core[claude]"          # Claude only
+pip install "reckonsys-llm-core[ollama]"          # Ollama only
+pip install "reckonsys-llm-core[claude,ollama,templates]"  # everything
+```
+
+## Architecture
+
+The library uses a strategy pattern. You pick a **strategy** (provider + model) and pass it to a **client** (capability set).
+
+```
+Strategy  →  ClaudeLLMStrategy / AsyncClaudeLLMStrategy / OllamaLLMStrategy / ...
+Client    →  LLMClient / AsyncLLMClient / BatchLLMClient / AsyncBatchLLMClient
+```
+
+## Client selection
+
+| Use case | Client |
+|---|---|
+| Scripts, CLIs, eval pipelines | `LLMClient` (sync) |
+| FastAPI, async services | `AsyncLLMClient` |
+| High-volume offline processing (50% cheaper) | `BatchLLMClient` / `AsyncBatchLLMClient` |
+
+Both `LLMClient` and `AsyncLLMClient` support the same features: plain query, structured output with retry, streaming, and agent loop.
+
+## Provider setup
+
+```python
+from reckonsys_llm_core.strategies.claude import (
+    ClaudeLLMStrategy, AsyncClaudeLLMStrategy,
+    create_claude_client, create_async_claude_client,
+    create_bedrock_client, create_async_bedrock_client,
+)
+from reckonsys_llm_core.strategies.ollama import OllamaLLMStrategy, AsyncOllamaLLMStrategy
+from reckonsys_llm_core import LLMClient, AsyncLLMClient
+
+# Claude (Anthropic API) — needs ANTHROPIC_API_KEY env var
+client = LLMClient(ClaudeLLMStrategy(client=create_claude_client(), model="claude-sonnet-4-6"))
+async_client = AsyncLLMClient(AsyncClaudeLLMStrategy(client=create_async_claude_client(), model="claude-sonnet-4-6"))
+
+# AWS Bedrock — uses boto3 credentials (AWS_ACCESS_KEY_ID, etc.)
+client = LLMClient(ClaudeLLMStrategy(client=create_bedrock_client(), model="us.anthropic.claude-sonnet-4-6-20251101-v1:0"))
+
+# Ollama (local) — Ollama server must be running at localhost:11434
+client = LLMClient(OllamaLLMStrategy(model="llama3.2"))
+client = LLMClient(OllamaLLMStrategy(model="llama3.2", host="http://my-server:11434"))
+```
+
+---
+
+## Pattern 1 — Plain text query
+
+```python
+from reckonsys_llm_core import LLMClient, ChatMessage
+
+response = client.query(
+    messages=[ChatMessage(role="user", content="What is the capital of France?")],
+    system="Answer concisely.",          # optional system prompt
+    temperature=0.7,                     # optional
+    max_tokens=1024,                     # optional
+)
+print(response.content)                  # str
+print(response.usage.total_tokens)       # input + output tokens
+print(response.stop_reason)              # StopReason enum
+print(response.thinking)                 # str | None (extended thinking only)
+```
+
+Async version — identical signature, await the call:
+```python
+response = await async_client.query(messages=[...])
+```
+
+---
+
+## Pattern 2 — Structured output (Pydantic)
+
+Returns a validated Pydantic model instance.
+
+```python
+from pydantic import BaseModel
+from reckonsys_llm_core import LLMClient, ChatMessage
+
+class Person(BaseModel):
+    name: str
+    age: int
+
+response = client.query_structured(
+    messages=[ChatMessage(role="user", content="Extract: Alice is 30 years old.")],
+    response_models=[Person],
+)
+person: Person = response.content      # validated Pydantic instance
+print(response.attempts)               # how many tries it took (async auto-retries)
+```
+
+**Single model** — uses Claude's native JSON schema mode (guaranteed valid, no tool overhead) when `strict=True` on the strategy. Default (tool-use mode) works with all providers.
+
+**Multiple models** — LLM picks the right schema (routing/classification). Pass more than one model:
+```python
+response = client.query_structured(
+    messages=[ChatMessage(role="user", content="I love this product!")],
+    response_models=[Person, Sentiment],
+    system="Use the most appropriate schema.",
+)
+```
+
+**Auto-retry** — both `LLMClient` and `AsyncLLMClient` retry on validation failure. The LLM sees its own bad output + the exact error, enabling self-correction. Configure at client construction time:
+```python
+from reckonsys_llm_core import LLMClient, AsyncLLMClient
+
+client = LLMClient(strategy, max_retries=3, on_retry=lambda ctx: print(ctx.error))
+async_client = AsyncLLMClient(strategy, max_retries=3, on_retry=lambda ctx: print(ctx.error))
+```
+
+Strict mode (Claude only, single model, guaranteed valid JSON):
+```python
+from reckonsys_llm_core.strategies.claude import ClaudeLLMStrategy, create_claude_client
+
+strategy = ClaudeLLMStrategy(client=create_claude_client(), model="claude-sonnet-4-6", strict=True)
+```
+
+---
+
+## Pattern 3 — Streaming
+
+Both `LLMClient` and `AsyncLLMClient` support streaming. Yields `StreamToken` per token then a final `StreamDone`.
+
+```python
+# Sync
+from reckonsys_llm_core import LLMClient, ChatMessage, StreamToken, StreamDone
+
+for event in client.stream_query(
+    messages=[ChatMessage(role="user", content="Tell me a story.")],
+):
+    if isinstance(event, StreamToken):
+        print(event.token, end="", flush=True)
+    elif isinstance(event, StreamDone):
+        print()
+        print(event.usage.total_tokens, event.stop_reason)
+
+# Async
+async for event in async_client.stream_query(
+    messages=[ChatMessage(role="user", content="Tell me a story.")],
+):
+    if isinstance(event, StreamToken):
+        print(event.token, end="", flush=True)
+    elif isinstance(event, StreamDone):
+        print()
+        print(event.usage.total_tokens, event.stop_reason)
+```
+
+> Streaming cannot be retried — tokens are forwarded before the response is complete. Do not use streaming for structured output.
+
+---
+
+## Pattern 4 — Tool calling / agent loop
+
+### Option A: functions as tools (recommended)
+
+`from_tools()` converts Python functions into tool definitions automatically using type hints and Google-style docstrings. Returns `(tools, executor)` which unpack directly into the agent call.
+
+```python
+from reckonsys_llm_core import LLMClient, AsyncLLMClient, ChatMessage, from_tools
+
+def get_weather(city: str, unit: str = "celsius") -> str:
+    """Return current weather for a city.
+
+    Args:
+        city: The city name.
+        unit: Temperature unit — celsius or fahrenheit.
+    """
+    return f"Sunny, 22°C in {city}"
+
+def calculate(expression: str) -> str:
+    """Evaluate a safe arithmetic expression.
+
+    Args:
+        expression: A Python arithmetic expression, e.g. '(3 + 4) * 2'.
+    """
+    return str(eval(expression))  # use safe eval in production
+
+tools, executor = from_tools(get_weather, calculate)
+
+# Sync agent loop
+response = client.run_agent(
+    messages=[ChatMessage(role="user", content="What's the weather in Paris?")],
+    tools=tools,
+    tool_executor=executor,
+)
+
+# Async agent loop (executor can be sync or async functions)
+response = await async_client.arun_agent(
+    messages=[ChatMessage(role="user", content="What's the weather in Paris?")],
+    tools=tools,
+    tool_executor=executor,
+)
+print(response.content)
+```
+
+### Option B: manual ToolDefinition
+
+```python
+from reckonsys_llm_core import ToolDefinition
+
+tool = ToolDefinition(
+    name="get_weather",
+    description="Get current weather for a city.",
+    input_schema={
+        "type": "object",
+        "properties": {"city": {"type": "string", "description": "City name"}},
+        "required": ["city"],
+    },
+)
+```
+
+### Built-in: Claude web search
+
+```python
+from reckonsys_llm_core.strategies.claude import WEB_SEARCH_TOOL
+
+response = client.run_agent(
+    messages=[ChatMessage(role="user", content="What happened in the news today?")],
+    tools=[WEB_SEARCH_TOOL],
+    tool_executor=lambda name, input: "",   # web search is executed by Claude, not locally
+)
+```
+
+### Custom loop: dynamic tools or handoffs
+
+`run_agent` / `arun_agent` use a fixed tool set for the entire loop. When you need to change tools between iterations, inspect intermediate tool calls, or hand off to another agent, build the loop manually using `query()`:
+
+```python
+from reckonsys_llm_core import ChatMessage, StopReason, TextContent, ToolUseContent, ToolResultContent
+
+messages = [ChatMessage(role="user", content="...")]
+current_tools = initial_tools   # can be swapped each iteration
+
+while True:
+    response = client.query(messages=messages, tools=current_tools)
+
+    if response.stop_reason != StopReason.TOOL_USE:
+        break
+
+    # Inspect tool calls before executing — swap tools, trigger handoff, etc.
+    for tc in response.tool_calls:
+        if tc.name == "transfer_to_billing_agent":
+            # hand off: start a new loop with a different tool set / system prompt
+            ...
+
+    # Rebuild assistant message and execute tools
+    assistant_content = []
+    if response.content:
+        assistant_content.append(TextContent(text=response.content))
+    for tc in response.tool_calls:
+        assistant_content.append(ToolUseContent(id=tc.id, name=tc.name, input=tc.input))
+    messages.append(ChatMessage(role="assistant", content=assistant_content))
+
+    tool_results = []
+    for tc in response.tool_calls:
+        result = your_executor(tc.name, tc.input)
+        tool_results.append(ToolResultContent(tool_use_id=tc.id, content=result))
+    messages.append(ChatMessage(role="user", content=tool_results))
+
+    current_tools = next_tools   # update tools for next iteration if needed
+
+print(response.content)
+```
+
+> `run_agent` is this loop with the boilerplate filled in. Use it for fixed-tool cases; build the loop manually when you need control between iterations.
+
+---
+
+## Pattern 5 — Batch processing (Claude only)
+
+Up to 50% cheaper, higher rate limits. Processes up to 100k requests per batch. Batches expire after 24 hours.
+
+```python
+from reckonsys_llm_core import BatchLLMClient, BatchRequest, BatchStatus, ChatMessage, LLMParams
+from reckonsys_llm_core.strategies.claude import ClaudeBatchStrategy, create_claude_client
+
+client = BatchLLMClient(ClaudeBatchStrategy(client=create_claude_client(), model="claude-sonnet-4-6"))
+
+requests = [
+    BatchRequest(
+        custom_id=f"item-{i}",
+        params=LLMParams(messages=[ChatMessage(role="user", content=f"What is {i} squared?")]),
+    )
+    for i in range(10)
+]
+
+batch = client.submit(requests)
+print(batch.batch_id)   # PERSIST THIS — needed to retrieve results later
+
+# Poll later (e.g. in a cron job)
+batch = client.status(batch.batch_id)
+if batch.status == BatchStatus.ENDED:
+    for result in client.results(batch.batch_id):
+        print(result.custom_id, result.response.content if result.response else result.error)
+```
+
+> Always persist `batch_id` after `submit()`. The library does not store it for you.
+
+---
+
+## Pattern 6 — Extended thinking
+
+```python
+from reckonsys_llm_core import ThinkingConfig
+
+response = client.query(
+    messages=[ChatMessage(role="user", content="Solve this step by step...")],
+    thinking=ThinkingConfig(enabled=True, budget_tokens=2000),
+)
+print(response.thinking)   # reasoning trace (str | None)
+print(response.content)    # final answer
+```
+
+---
+
+## Message content types
+
+`ChatMessage.content` accepts a string or a list of typed content blocks:
+
+```python
+from reckonsys_llm_core import ChatMessage, TextContent, ImageContent, DocumentContent
+
+# Plain string (most common)
+msg = ChatMessage(role="user", content="Hello")
+
+# Rich content
+msg = ChatMessage(role="user", content=[
+    TextContent(text="Describe this image:"),
+    ImageContent(source="<base64_string>", media_type="image/png"),
+])
+
+# Document with citations (Claude only)
+msg = ChatMessage(role="user", content=[
+    DocumentContent(text="...long text...", title="Report Q1", citations_enabled=True),
+    TextContent(text="Summarize the key findings."),
+])
+```
+
+Access citations from the response:
+```python
+for citation in response.citations:
+    print(citation.cited_text, citation.title, citation.url)
+```
+
+Cache a message (Claude prompt caching):
+```python
+msg = ChatMessage(role="user", content="...", cache=True)
+```
+
+---
+
+## Key response fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `response.content` | `str` | Text output |
+| `response.usage.total_tokens` | `int` | `input + output` |
+| `response.usage.cache_read_tokens` | `int` | Tokens served from cache |
+| `response.stop_reason` | `StopReason` | `END_TURN \| TOOL_USE \| MAX_TOKENS \| ERROR` |
+| `response.thinking` | `str \| None` | Extended thinking trace |
+| `response.tool_calls` | `list[ToolCall]` | Raw tool calls (agent loop handles these for you) |
+| `response.citations` | `list[Citation]` | From web search or DocumentContent |
+| `response.attempts` | `int` | Retry count (structured output) |
+
+---
+
+## Common mistakes
+
+- **Using `LLMClient` in async code** — use `AsyncLLMClient` instead.
+- **Streaming + structured output** — not supported. Streaming cannot retry.
+- **Forgetting to persist `batch_id`** — call `client.status(batch_id)` / `client.results(batch_id)` with the ID you saved, not a `Batch` object.
+- **`strict=True` with multiple `response_models`** — strict mode only works for a single model; it silently falls back to tool-use with multiple.
+- **Using `tool_executor` for `WEB_SEARCH_TOOL`** — web search is executed server-side by Claude. Your executor is called for all *other* tools; just return `""` or ignore it for web search.
+- **Ollama + streaming** — not supported by the Ollama strategy.
+- **`tool_from_function` with `*args` / `**kwargs`** — variadic parameters are silently ignored when generating the schema.
+
+---
+
+## Where to find more detail
+
+All classes and methods have full docstrings in the installed package. Read them for parameter details, edge cases, and provider-specific behavior:
+
+- `src/reckonsys_llm_core/types.py` — all type definitions
+- `src/reckonsys_llm_core/client.py` — client method signatures
+- `src/reckonsys_llm_core/fn_tools.py` — `tool_from_function`, `from_tools` internals
+- `src/reckonsys_llm_core/strategies/claude.py` — Claude-specific options (`strict`, bedrock, batch)
+- `src/reckonsys_llm_core/strategies/ollama.py` — Ollama-specific behavior
+- `examples/` — 13 runnable scripts, one per concept

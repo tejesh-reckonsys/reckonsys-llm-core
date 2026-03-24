@@ -445,6 +445,45 @@ class ClaudeLLMStrategy(_ClaudeBase):
             res, {m.__name__: m for m in params.response_models}
         )
 
+    def stream_query(self, params: LLMParams) -> Generator[StreamEvent, None, None]:
+        """Yields StreamToken per token, then a final StreamDone with full metadata."""
+        full_content = ""
+        thinking_text = None
+
+        with self.client.messages.stream(**self._kwargs(params)) as stream:
+            for text in stream.text_stream:
+                full_content += text
+                yield StreamToken(token=text)
+
+            final = stream.get_final_message()
+            citations: list[Citation] = []
+            for block in final.content:
+                if isinstance(block, ThinkingBlock):
+                    thinking_text = block.thinking
+                elif isinstance(block, TextBlock):
+                    for c in block.citations or []:
+                        cited_text = getattr(c, "cited_text", "")
+                        if isinstance(c, (CitationCharLocation, CitationContentBlockLocation)):
+                            citations.append(Citation(
+                                cited_text=cited_text,
+                                document_title=c.document_title,
+                                document_index=c.document_index,
+                            ))
+                        else:
+                            url = getattr(c, "url", None)
+                            title = getattr(c, "title", None)
+                            if cited_text or url:
+                                citations.append(Citation(cited_text=cited_text, url=url, title=title))
+
+        yield StreamDone(
+            full_content=full_content,
+            usage=_map_usage(final),
+            model=self.model,
+            stop_reason=STOP_REASON_MAP.get(final.stop_reason) if final.stop_reason else None,
+            thinking=thinking_text,
+            citations=citations,
+        )
+
 
 # --- Async strategy ---
 
