@@ -22,10 +22,10 @@ ollama pull llama3.2
 
 ## Strategies
 
-| Class | Use case |
-|---|---|
-| `OllamaLLMStrategy` | Sync |
-| `AsyncOllamaLLMStrategy` | Async |
+| Class | Use case | `provider_name` |
+|---|---|---|
+| `OllamaLLMStrategy` | Sync | `"ollama"` |
+| `AsyncOllamaLLMStrategy` | Async | `"ollama"` |
 
 No batch strategy — Ollama has no native batch API.
 

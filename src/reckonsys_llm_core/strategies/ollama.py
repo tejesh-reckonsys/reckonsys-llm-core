@@ -176,6 +176,10 @@ class _OllamaBase:
         self.host = host
         self.default_max_tokens = default_max_tokens
 
+    @property
+    def provider_name(self) -> str:
+        return "ollama"
+
     def _parse_response(self, res: ChatResponse) -> LLMResponse:
         done_reason = getattr(res, "done_reason", None)
         tool_calls = [

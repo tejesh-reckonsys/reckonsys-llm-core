@@ -19,6 +19,18 @@ Strategy  →  ClaudeLLMStrategy / AsyncClaudeLLMStrategy / OllamaLLMStrategy / 
 Client    →  LLMClient / AsyncLLMClient / BatchLLMClient / AsyncBatchLLMClient
 ```
 
+All strategies expose a `provider_name` property for runtime provider detection:
+
+| Strategy | `provider_name` |
+|---|---|
+| `ClaudeLLMStrategy` / `AsyncClaudeLLMStrategy` (Anthropic client) | `"claude"` |
+| `ClaudeLLMStrategy` / `AsyncClaudeLLMStrategy` (Bedrock client) | `"claude_bedrock"` |
+| `ClaudeBatchStrategy` / `AsyncClaudeBatchStrategy` (Anthropic client) | `"claude"` |
+| `ClaudeBatchStrategy` / `AsyncClaudeBatchStrategy` (Bedrock client) | `"claude_bedrock"` |
+| `OpenAILLMStrategy` / `AsyncOpenAILLMStrategy` | `"openai"` |
+| `OpenAIBatchStrategy` / `AsyncOpenAIBatchStrategy` | `"openai"` |
+| `OllamaLLMStrategy` / `AsyncOllamaLLMStrategy` | `"ollama"` |
+
 ## Client selection
 
 | Use case | Client |

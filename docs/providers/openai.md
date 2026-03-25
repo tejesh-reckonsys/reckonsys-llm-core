@@ -53,12 +53,12 @@ Set `OPENAI_API_KEY` in your environment (or pass it explicitly via `create_open
 
 ## Strategies
 
-| Class | Client type | Use case |
-|---|---|---|
-| `OpenAILLMStrategy` | `OpenAI` | Sync |
-| `AsyncOpenAILLMStrategy` | `AsyncOpenAI` | Async |
-| `OpenAIBatchStrategy` | `OpenAI` | Sync batch |
-| `AsyncOpenAIBatchStrategy` | `AsyncOpenAI` | Async batch |
+| Class | Client type | Use case | `provider_name` |
+|---|---|---|---|
+| `OpenAILLMStrategy` | `OpenAI` | Sync | `"openai"` |
+| `AsyncOpenAILLMStrategy` | `AsyncOpenAI` | Async | `"openai"` |
+| `OpenAIBatchStrategy` | `OpenAI` | Sync batch | `"openai"` |
+| `AsyncOpenAIBatchStrategy` | `AsyncOpenAI` | Async batch | `"openai"` |
 
 ---
 

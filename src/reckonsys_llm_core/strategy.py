@@ -16,6 +16,9 @@ from reckonsys_llm_core.types import (
 class LLMStrategy(Protocol):
     """Synchronous LLM strategy — for scripts, CLI tools, and eval pipelines."""
 
+    @property
+    def provider_name(self) -> str: ...
+
     def send_query(self, params: LLMParams) -> LLMResponse: ...
 
     def send_structured_query(
@@ -33,6 +36,9 @@ class AsyncLLMStrategy(Protocol):
     Call it directly and iterate with `async for`.
     """
 
+    @property
+    def provider_name(self) -> str: ...
+
     async def send_query(self, params: LLMParams) -> LLMResponse: ...
 
     async def send_structured_query(
@@ -49,6 +55,9 @@ class BatchLLMStrategy(Protocol):
     This is just the Python calling convention (no async/await required).
     """
 
+    @property
+    def provider_name(self) -> str: ...
+
     def create_batch(self, requests: list[BatchRequest]) -> Batch: ...
     def get_batch(self, batch_id: str) -> Batch: ...
     def cancel_batch(self, batch_id: str) -> Batch: ...
@@ -64,6 +73,9 @@ class AsyncBatchLLMStrategy(Protocol):
 
     get_results is a regular method (not async) that returns an AsyncIterator.
     """
+
+    @property
+    def provider_name(self) -> str: ...
 
     async def create_batch(self, requests: list[BatchRequest]) -> Batch: ...
     async def get_batch(self, batch_id: str) -> Batch: ...

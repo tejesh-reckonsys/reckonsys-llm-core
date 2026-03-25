@@ -33,12 +33,14 @@ Set `ANTHROPIC_API_KEY` in your environment (or pass it explicitly via `create_c
 
 ## Strategies
 
-| Class | Client type | Use case |
-|---|---|---|
-| `ClaudeLLMStrategy` | `Anthropic` / `AnthropicBedrock` | Sync |
-| `AsyncClaudeLLMStrategy` | `AsyncAnthropic` / `AsyncAnthropicBedrock` | Async |
-| `ClaudeBatchStrategy` | `Anthropic` / `AnthropicBedrock` | Sync batch |
-| `AsyncClaudeBatchStrategy` | `AsyncAnthropic` / `AsyncAnthropicBedrock` | Async batch |
+| Class | Client type | Use case | `provider_name` |
+|---|---|---|---|
+| `ClaudeLLMStrategy` | `Anthropic` / `AnthropicBedrock` | Sync | `"claude"` / `"claude_bedrock"` |
+| `AsyncClaudeLLMStrategy` | `AsyncAnthropic` / `AsyncAnthropicBedrock` | Async | `"claude"` / `"claude_bedrock"` |
+| `ClaudeBatchStrategy` | `Anthropic` / `AnthropicBedrock` | Sync batch | `"claude"` / `"claude_bedrock"` |
+| `AsyncClaudeBatchStrategy` | `AsyncAnthropic` / `AsyncAnthropicBedrock` | Async batch | `"claude"` / `"claude_bedrock"` |
+
+`provider_name` is `"claude"` when constructed with a direct Anthropic client, and `"claude_bedrock"` when constructed with a Bedrock client.
 
 ---
 

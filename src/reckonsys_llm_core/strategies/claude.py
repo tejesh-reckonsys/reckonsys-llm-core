@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncGenerator, Generator
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from anthropic import Anthropic, AnthropicBedrock, AsyncAnthropic, AsyncAnthropicBedrock
 from anthropic.types import (
@@ -285,11 +285,17 @@ class _ClaudeBase:
         model: str,
         default_max_tokens: int,
         strict: bool,
+        provider_name: Literal["claude", "claude_bedrock"],
     ) -> None:
         self.client = client
         self.model = model
         self.default_max_tokens = default_max_tokens
         self.strict = strict
+        self._provider_name = provider_name
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
 
     def _kwargs(self, params: LLMParams) -> dict[str, Any]:
         return _build_kwargs(params, self.model, self.default_max_tokens)
@@ -427,7 +433,13 @@ class ClaudeLLMStrategy(_ClaudeBase):
         default_max_tokens: int = DEFAULT_MAX_TOKENS,
         strict: bool = False,
     ) -> None:
-        super().__init__(client, model, default_max_tokens, strict)
+        super().__init__(
+            client,
+            model,
+            default_max_tokens,
+            strict,
+            "claude" if isinstance(client, Anthropic) else "claude_bedrock",
+        )
 
     def __str__(self) -> str:
         return f"Claude({self.model})"
@@ -516,7 +528,13 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
         default_max_tokens: int = DEFAULT_MAX_TOKENS,
         strict: bool = False,
     ) -> None:
-        super().__init__(client, model, default_max_tokens, strict)
+        super().__init__(
+            client,
+            model,
+            default_max_tokens,
+            strict,
+            "claude" if isinstance(client, AsyncAnthropic) else "claude_bedrock",
+        )
 
     def __str__(self) -> str:
         return f"AsyncClaude({self.model})"
@@ -623,6 +641,13 @@ class ClaudeBatchStrategy:
         self.client = client
         self.model = model
         self.default_max_tokens = default_max_tokens
+        self._provider_name = (
+            "claude" if isinstance(client, Anthropic) else "claude_bedrock"
+        )
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
 
     def __str__(self) -> str:
         return f"ClaudeBatch({self.model})"
@@ -716,6 +741,13 @@ class AsyncClaudeBatchStrategy:
         self.client = client
         self.model = model
         self.default_max_tokens = default_max_tokens
+        self._provider_name = (
+            "claude" if isinstance(client, AsyncAnthropic) else "claude_bedrock"
+        )
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
 
     def __str__(self) -> str:
         return f"AsyncClaudeBatch({self.model})"

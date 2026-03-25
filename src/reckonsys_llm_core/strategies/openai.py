@@ -316,6 +316,10 @@ class _OpenAIBase:
         self.default_max_tokens = default_max_tokens
         self.strict = strict
 
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
     def _kwargs(self, params: LLMParams) -> dict[str, Any]:
         return _build_kwargs(params, self.model, self.default_max_tokens)
 
@@ -730,6 +734,10 @@ class OpenAIBatchStrategy:
         self.model = model
         self.default_max_tokens = default_max_tokens
 
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
     def __str__(self) -> str:
         return f"OpenAIBatch({self.model})"
 
@@ -796,6 +804,10 @@ class AsyncOpenAIBatchStrategy:
         self.client = client
         self.model = model
         self.default_max_tokens = default_max_tokens
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
 
     def __str__(self) -> str:
         return f"AsyncOpenAIBatch({self.model})"
