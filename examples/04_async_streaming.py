@@ -29,14 +29,18 @@ async def main() -> None:
     print("Streaming response: ", end="", flush=True)
 
     async for event in client.stream_query(
-        messages=[ChatMessage(role="user", content="Count from 1 to 5, one number per line.")],
+        messages=[
+            ChatMessage(role="user", content="Count from 1 to 5, one number per line.")
+        ],
     ):
         if isinstance(event, StreamToken):
             print(event.token, end="", flush=True)
         elif isinstance(event, StreamDone):
             print()  # newline after stream ends
             print(f"stop_reason={event.stop_reason}")
-            print(f"tokens used: input={event.usage.input_tokens} output={event.usage.output_tokens}")
+            print(
+                f"tokens used: input={event.usage.input_tokens} output={event.usage.output_tokens}"
+            )
 
 
 asyncio.run(main())

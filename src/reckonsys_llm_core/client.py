@@ -1,14 +1,21 @@
 import inspect
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import replace
-from typing import Any, AsyncIterator, Awaitable, Callable, Iterator
+from typing import Any
 
 from pydantic import BaseModel
 
-from reckonsys_llm_core.strategy import AsyncBatchLLMStrategy, AsyncLLMStrategy, BatchLLMStrategy, LLMStrategy
+from reckonsys_llm_core.strategy import (
+    AsyncBatchLLMStrategy,
+    AsyncLLMStrategy,
+    BatchLLMStrategy,
+    LLMStrategy,
+)
 from reckonsys_llm_core.types import (
     Batch,
     BatchRequest,
     BatchResult,
+    ChatContent,
     ChatMessage,
     LLMParams,
     LLMResponse,
@@ -230,22 +237,30 @@ class LLMClient:
                 return response
 
             # Reconstruct the full assistant message (text + tool_use blocks)
-            assistant_content: list = []
+            assistant_content: ChatContent = []
             if response.content:
                 assistant_content.append(TextContent(text=response.content))
             for tc in response.tool_calls:
-                assistant_content.append(ToolUseContent(id=tc.id, name=tc.name, input=tc.input))
-            current_messages.append(ChatMessage(role="assistant", content=assistant_content))
+                assistant_content.append(
+                    ToolUseContent(id=tc.id, name=tc.name, input=tc.input)
+                )
+            current_messages.append(
+                ChatMessage(role="assistant", content=assistant_content)
+            )
 
             # Execute tools and collect results
             tool_results: list[ToolResultContent] = []
             for tc in response.tool_calls:
                 try:
                     result = tool_executor(tc.name, tc.input)
-                    tool_results.append(ToolResultContent(tool_use_id=tc.id, content=result))
+                    tool_results.append(
+                        ToolResultContent(tool_use_id=tc.id, content=result)
+                    )
                 except Exception as exc:
                     tool_results.append(
-                        ToolResultContent(tool_use_id=tc.id, content=str(exc), is_error=True)
+                        ToolResultContent(
+                            tool_use_id=tc.id, content=str(exc), is_error=True
+                        )
                     )
             current_messages.append(ChatMessage(role="user", content=tool_results))  # type: ignore[arg-type]
 
@@ -448,22 +463,34 @@ class AsyncLLMClient:
             if response.stop_reason != StopReason.TOOL_USE:
                 return response
 
-            assistant_content: list = []
+            assistant_content: ChatContent = []
             if response.content:
                 assistant_content.append(TextContent(text=response.content))
             for tc in response.tool_calls:
-                assistant_content.append(ToolUseContent(id=tc.id, name=tc.name, input=tc.input))
-            current_messages.append(ChatMessage(role="assistant", content=assistant_content))
+                assistant_content.append(
+                    ToolUseContent(id=tc.id, name=tc.name, input=tc.input)
+                )
+            current_messages.append(
+                ChatMessage(role="assistant", content=assistant_content)
+            )
 
-            tool_results: list[ToolResultContent] = []
+            tool_results: ChatContent = []
             for tc in response.tool_calls:
                 try:
                     maybe_coro = tool_executor(tc.name, tc.input)
-                    result = await maybe_coro if inspect.isawaitable(maybe_coro) else maybe_coro
-                    tool_results.append(ToolResultContent(tool_use_id=tc.id, content=str(result)))
+                    result = (
+                        await maybe_coro
+                        if inspect.isawaitable(maybe_coro)
+                        else maybe_coro
+                    )
+                    tool_results.append(
+                        ToolResultContent(tool_use_id=tc.id, content=str(result))
+                    )
                 except Exception as exc:
                     tool_results.append(
-                        ToolResultContent(tool_use_id=tc.id, content=str(exc), is_error=True)
+                        ToolResultContent(
+                            tool_use_id=tc.id, content=str(exc), is_error=True
+                        )
                     )
             current_messages.append(ChatMessage(role="user", content=tool_results))  # type: ignore[arg-type]
 

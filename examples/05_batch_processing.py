@@ -19,7 +19,6 @@ from reckonsys_llm_core import (
     AsyncBatchLLMClient,
     BatchLLMClient,
     BatchRequest,
-    BatchStatus,
     ChatMessage,
     LLMParams,
 )
@@ -34,7 +33,12 @@ REQUESTS = [
     BatchRequest(
         custom_id=f"item-{i}",
         params=LLMParams(
-            messages=[ChatMessage(role="user", content=f"What is {i} squared? Answer with just the number.")],
+            messages=[
+                ChatMessage(
+                    role="user",
+                    content=f"What is {i} squared? Answer with just the number.",
+                )
+            ],
         ),
     )
     for i in range(1, 6)
@@ -73,7 +77,9 @@ def sync_batch() -> None:
 
 async def async_batch() -> None:
     client = AsyncBatchLLMClient(
-        AsyncClaudeBatchStrategy(client=create_async_claude_client(), model="claude-opus-4-6")
+        AsyncClaudeBatchStrategy(
+            client=create_async_claude_client(), model="claude-opus-4-6"
+        )
     )
 
     batch = await client.submit(REQUESTS)

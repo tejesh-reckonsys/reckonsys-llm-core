@@ -33,3 +33,21 @@ packages = ["src/reckonsys_llm_core"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/reckonsys_llm_core/llms.txt" = "reckonsys_llm_core/llms.txt"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pyright]
+executionEnvironments = [
+    { root = "src", typeCheckingMode = "standard" },
+    { root = "examples", typeCheckingMode = "basic" },
+]

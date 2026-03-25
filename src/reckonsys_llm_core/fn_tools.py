@@ -10,7 +10,8 @@ to build the ToolDefinition automatically — no manual JSON schema required.
 
 import inspect
 import re
-from typing import Any, Callable, NamedTuple, get_type_hints
+from collections.abc import Callable
+from typing import Any, NamedTuple, get_type_hints
 
 from pydantic import Field, create_model
 
@@ -58,7 +59,9 @@ def _parse_docstring(doc: str) -> tuple[str, dict[str, str]]:
             block,
             re.MULTILINE | re.DOTALL,
         ):
-            desc = " ".join(line.strip() for line in m.group(2).split("\n") if line.strip())
+            desc = " ".join(
+                line.strip() for line in m.group(2).split("\n") if line.strip()
+            )
             param_descriptions[m.group(1)] = desc
 
     summary_lines: list[str] = []
@@ -125,7 +128,10 @@ def tool_from_function(fn: Callable[..., Any]) -> ToolDefinition:
 
     fields: dict[str, Any] = {}
     for name, param in sig.parameters.items():
-        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+        if param.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
             continue
 
         annotation = hints.get(name, Any)
@@ -139,7 +145,9 @@ def tool_from_function(fn: Callable[..., Any]) -> ToolDefinition:
         else:
             fields[name] = (
                 annotation,
-                Field(param.default, description=param_desc) if param_desc else param.default,
+                Field(param.default, description=param_desc)
+                if param_desc
+                else param.default,
             )
 
     DynamicModel = create_model(fn.__name__, **fields)
@@ -165,6 +173,7 @@ class ToolKit(NamedTuple):
         tools, executor = from_tools(get_weather, calculate)
         response = client.run_agent(messages, tools, executor)
     """
+
     tools: list[ToolDefinition]
     executor: Callable[[str, dict[str, Any]], str]
 

@@ -11,7 +11,7 @@ Requires: ANTHROPIC_API_KEY
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from reckonsys_llm_core import (
@@ -31,6 +31,7 @@ from reckonsys_llm_core.strategies.claude import (
 # ---------------------------------------------------------------------------
 # 1. Inspecting what tool_from_function produces
 # ---------------------------------------------------------------------------
+
 
 def get_weather(city: str, unit: Literal["celsius", "fahrenheit"] = "celsius") -> str:
     """Return the current weather for a city.
@@ -54,6 +55,7 @@ print()
 # 2. from_tools — multiple functions, auto-generates tools + executor
 # ---------------------------------------------------------------------------
 
+
 def calculate(expression: str) -> str:
     """Evaluate a safe arithmetic expression.
 
@@ -64,15 +66,18 @@ def calculate(expression: str) -> str:
     import operator as op
 
     _ops = {
-        ast.Add: op.add, ast.Sub: op.sub,
-        ast.Mult: op.mul, ast.Div: op.truediv,
-        ast.Pow: op.pow, ast.USub: op.neg,
+        ast.Add: op.add,
+        ast.Sub: op.sub,
+        ast.Mult: op.mul,
+        ast.Div: op.truediv,
+        ast.Pow: op.pow,
+        ast.USub: op.neg,
     }
 
     def _eval(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
             return float(node.value)
         if isinstance(node, ast.BinOp) and type(node.op) in _ops:
             return _ops[type(node.op)](_eval(node.left), _eval(node.right))
@@ -85,7 +90,7 @@ def calculate(expression: str) -> str:
 
 def get_current_time() -> str:
     """Return the current UTC date and time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 tools, executor = from_tools(calculate, get_current_time)
@@ -100,16 +105,19 @@ print()
 # 3. Using the ToolKit with run_agent (sync)
 # ---------------------------------------------------------------------------
 
+
 def run_sync() -> None:
     client = LLMClient(
         ClaudeLLMStrategy(client=create_claude_client(), model="claude-opus-4-6")
     )
 
     response = client.run_agent(
-        messages=[ChatMessage(
-            role="user",
-            content="What is (123 * 456) + (789 / 3)? Also, what time is it right now?",
-        )],
+        messages=[
+            ChatMessage(
+                role="user",
+                content="What is (123 * 456) + (789 / 3)? Also, what time is it right now?",
+            )
+        ],
         tools=tools,
         tool_executor=executor,
     )
@@ -120,16 +128,21 @@ def run_sync() -> None:
 # 4. Using the ToolKit with arun_agent (async)
 # ---------------------------------------------------------------------------
 
+
 async def run_async() -> None:
     client = AsyncLLMClient(
-        AsyncClaudeLLMStrategy(client=create_async_claude_client(), model="claude-opus-4-6")
+        AsyncClaudeLLMStrategy(
+            client=create_async_claude_client(), model="claude-opus-4-6"
+        )
     )
 
     response = await client.arun_agent(
-        messages=[ChatMessage(
-            role="user",
-            content="What is 2 ** 10? And what time is it now?",
-        )],
+        messages=[
+            ChatMessage(
+                role="user",
+                content="What is 2 ** 10? And what time is it now?",
+            )
+        ],
         tools=tools,
         tool_executor=executor,
     )

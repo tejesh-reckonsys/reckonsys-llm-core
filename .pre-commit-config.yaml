@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix, --unsafe-fixes]
+      - id: ruff-format
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.408
+    hooks:
+      - id: pyright
+        args: [--project, pyproject.toml]
+        additional_dependencies:
+          - pydantic
+          - anthropic
+          - ollama
+          - jinja2

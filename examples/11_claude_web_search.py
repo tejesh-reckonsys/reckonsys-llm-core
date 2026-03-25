@@ -31,12 +31,12 @@ MODEL = "claude-opus-4-6"
 # Sync — single question
 # ---------------------------------------------------------------------------
 
-sync_client = LLMClient(
-    ClaudeLLMStrategy(client=create_claude_client(), model=MODEL)
-)
+sync_client = LLMClient(ClaudeLLMStrategy(client=create_claude_client(), model=MODEL))
 
 response = sync_client.query(
-    messages=[ChatMessage(role="user", content="What is the latest stable release of Python?")],
+    messages=[
+        ChatMessage(role="user", content="What is the latest stable release of Python?")
+    ],
     tools=[WEB_SEARCH_TOOL],
 )
 print("[web_search sync]", response.content)

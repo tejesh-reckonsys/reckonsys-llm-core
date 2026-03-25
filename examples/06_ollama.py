@@ -13,8 +13,11 @@ import asyncio
 
 from pydantic import BaseModel
 
-from reckonsys_llm_core import AsyncLLMClient, ChatMessage, LLMClient, ThinkingConfig
-from reckonsys_llm_core.strategies.ollama import AsyncOllamaLLMStrategy, OllamaLLMStrategy
+from reckonsys_llm_core import AsyncLLMClient, ChatMessage, LLMClient
+from reckonsys_llm_core.strategies.ollama import (
+    AsyncOllamaLLMStrategy,
+    OllamaLLMStrategy,
+)
 
 
 class Person(BaseModel):

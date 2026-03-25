@@ -30,6 +30,7 @@ client = LLMClient(
 # Pattern A — scripted pipeline
 # ---------------------------------------------------------------------------
 
+
 def scripted() -> None:
     """
     Demonstrate a multi-step reasoning pipeline where each turn builds on the last.
@@ -59,6 +60,7 @@ def scripted() -> None:
 # ---------------------------------------------------------------------------
 # Pattern B — interactive REPL
 # ---------------------------------------------------------------------------
+
 
 def repl() -> None:
     """Simple chat loop. Type 'exit' or Ctrl-C to quit."""

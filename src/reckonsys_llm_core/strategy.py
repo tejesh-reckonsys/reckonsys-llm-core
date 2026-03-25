@@ -1,4 +1,5 @@
-from typing import AsyncIterator, Iterator, Protocol
+from collections.abc import AsyncIterator, Iterator
+from typing import Protocol
 
 from reckonsys_llm_core.types import (
     Batch,

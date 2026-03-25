@@ -36,6 +36,7 @@ class ThinkingConfig:
 
 # --- Tool types ---
 
+
 @dataclass
 class ToolDefinition:
     """
@@ -64,6 +65,7 @@ class ToolDefinition:
             raw_config={"type": "web_search_20250305", "name": "web_search"},
         )
     """
+
     name: str
     description: str = ""
     input_schema: dict[str, Any] = field(default_factory=dict)
@@ -74,8 +76,9 @@ class ToolDefinition:
 @dataclass
 class ToolCall:
     """A tool call returned by the LLM in a response."""
-    id: str            # provider-assigned ID (Anthropic) or synthetic (Ollama: "call_0")
-    name: str          # tool name
+
+    id: str  # provider-assigned ID (Anthropic) or synthetic (Ollama: "call_0")
+    name: str  # tool name
     input: dict[str, Any]  # parsed arguments
 
 
@@ -86,6 +89,7 @@ class ToolUseContent:
     Include this in the assistant ChatMessage you append to the conversation
     after receiving a tool_use response, before sending tool results.
     """
+
     id: str
     name: str
     input: dict[str, Any]
@@ -99,6 +103,7 @@ class ToolResultContent:
     Include these in the user ChatMessage you send after executing tools.
     Set is_error=True if the tool raised an exception.
     """
+
     tool_use_id: str
     content: str
     is_error: bool = False
@@ -115,6 +120,7 @@ class ToolChoice:
     type="tool"  — must call the specific tool named in `name`
     type="none"  — not allowed to call any tool
     """
+
     type: Literal["auto", "any", "tool", "none"] = "auto"
     name: str | None = None  # required when type == "tool"
 
@@ -128,14 +134,16 @@ class Citation:
     Document citations set `document_title` and `document_index`.
     `cited_text` is always the exact passage that was cited.
     """
+
     cited_text: str
-    url: str | None = None              # web search
-    title: str | None = None            # web search source title
-    document_title: str | None = None   # DocumentContent citation
-    document_index: int | None = None   # which document in the message (0-indexed)
+    url: str | None = None  # web search
+    title: str | None = None  # web search source title
+    document_title: str | None = None  # DocumentContent citation
+    document_index: int | None = None  # which document in the message (0-indexed)
 
 
 # --- Content types ---
+
 
 @dataclass
 class DocumentContent:
@@ -158,6 +166,7 @@ class DocumentContent:
             ],
         )
     """
+
     text: str
     title: str | None = None
     citations_enabled: bool = True
@@ -180,7 +189,8 @@ class ImageContent:
 
     Note: Ollama does not support URL images — only base64 is portable across all providers.
     """
-    source: str        # base64 data or URL string
+
+    source: str  # base64 data or URL string
     media_type: Literal["image/png", "image/jpeg", "image/gif", "image/webp"]
     is_url: bool = False
     type: Literal["image"] = "image"
@@ -189,7 +199,16 @@ class ImageContent:
 # A message's content is either a plain string or a list of content blocks.
 # ToolUseContent appears in assistant messages (tool calls made by the LLM).
 # ToolResultContent appears in user messages (results returned by your code).
-ChatContent = str | list[TextContent | ImageContent | DocumentContent | ToolUseContent | ToolResultContent]
+ChatContent = (
+    str
+    | list[
+        TextContent
+        | ImageContent
+        | DocumentContent
+        | ToolUseContent
+        | ToolResultContent
+    ]
+)
 
 
 @dataclass
@@ -200,6 +219,7 @@ class ChatMessage:
 
 
 # --- Request params ---
+
 
 @dataclass
 class LLMParams:
@@ -222,6 +242,7 @@ class LLMStructuredParams(LLMParams):
 
 # --- Responses ---
 
+
 @dataclass
 class LLMResponse:
     content: str
@@ -238,7 +259,7 @@ class LLMResponse:
 @dataclass
 class LLMStructuredResponse:
     content: BaseModel | None
-    raw_content: str          # raw string before parsing — used by client for retry correction
+    raw_content: str  # raw string before parsing — used by client for retry correction
     usage: TokenUsage
     model: str
     stop_reason: StopReason | None = None
@@ -250,9 +271,11 @@ class LLMStructuredResponse:
 
 # --- Streaming ---
 
+
 @dataclass
 class StreamToken:
     """Yielded once per token during streaming."""
+
     token: str
     is_done: Literal[False] = False
 
@@ -260,6 +283,7 @@ class StreamToken:
 @dataclass
 class StreamDone:
     """Final event yielded after all tokens — carries full metadata."""
+
     full_content: str
     usage: TokenUsage
     model: str
@@ -275,33 +299,40 @@ StreamEvent = StreamToken | StreamDone
 
 # --- Batch processing ---
 
+
 class BatchStatus(StrEnum):
     IN_PROGRESS = "in_progress"
-    CANCELING   = "canceling"
-    ENDED       = "ended"
+    CANCELING = "canceling"
+    ENDED = "ended"
 
 
 @dataclass
 class BatchRequestCounts:
     processing: int = 0
-    succeeded:  int = 0
-    errored:    int = 0
-    canceled:   int = 0
-    expired:    int = 0
+    succeeded: int = 0
+    errored: int = 0
+    canceled: int = 0
+    expired: int = 0
 
     @property
     def total(self) -> int:
-        return self.processing + self.succeeded + self.errored + self.canceled + self.expired
+        return (
+            self.processing
+            + self.succeeded
+            + self.errored
+            + self.canceled
+            + self.expired
+        )
 
 
 @dataclass
 class Batch:
-    batch_id:   str
-    status:     BatchStatus
-    counts:     BatchRequestCounts
+    batch_id: str
+    status: BatchStatus
+    counts: BatchRequestCounts
     created_at: datetime
     expires_at: datetime | None = None
-    ended_at:   datetime | None = None
+    ended_at: datetime | None = None
 
 
 @dataclass
@@ -317,6 +348,7 @@ class BatchRequest:
     here. If you need structured output from batch results, validate LLMResponse.content
     yourself after retrieving results.
     """
+
     custom_id: str
     params: LLMParams
 
@@ -324,17 +356,20 @@ class BatchRequest:
 @dataclass
 class BatchResult:
     """Result for a single request in a completed batch."""
+
     custom_id: str
-    response:  LLMResponse | None  # None when error/canceled/expired
-    error:     str | None = None   # set when response is None
+    response: LLMResponse | None  # None when error/canceled/expired
+    error: str | None = None  # set when response is None
 
 
 # --- Retry observability ---
 
+
 @dataclass
 class RetryContext:
     """Passed to the on_retry callback so callers can log/trace retry attempts."""
-    attempt: int                      # which attempt just failed (1-based)
-    error: str                        # validation error message
-    raw_content: str                  # what the LLM actually returned
-    params: LLMStructuredParams       # the params used for this attempt
+
+    attempt: int  # which attempt just failed (1-based)
+    error: str  # validation error message
+    raw_content: str  # what the LLM actually returned
+    params: LLMStructuredParams  # the params used for this attempt

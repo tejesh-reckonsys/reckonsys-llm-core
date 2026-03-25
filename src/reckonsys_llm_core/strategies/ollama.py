@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import Any, AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
 
 from ollama import AsyncClient, ChatResponse, Client, Options
 from pydantic import BaseModel
@@ -19,7 +20,6 @@ from reckonsys_llm_core.types import (
     StreamEvent,
     StreamToken,
     TextContent,
-    ThinkingConfig,
     TokenUsage,
     ToolCall,
     ToolDefinition,
@@ -39,6 +39,7 @@ DEFAULT_MAX_TOKENS = 8000
 
 
 # --- Module-level helpers ---
+
 
 def _build_options(params: LLMParams, default_max_tokens: int) -> Options:
     opts: dict[str, Any] = {"num_predict": params.max_tokens or default_max_tokens}
@@ -64,7 +65,9 @@ def _message_to_ollama_messages(m: ChatMessage) -> list[dict[str, Any]]:
         return [{"role": m.role, "content": m.content}]
 
     # User message carrying tool results → emit one "tool" message per result.
-    if m.role == "user" and all(isinstance(item, ToolResultContent) for item in m.content):
+    if m.role == "user" and all(
+        isinstance(item, ToolResultContent) for item in m.content
+    ):
         return [
             {"role": "tool", "content": item.content}
             for item in m.content
@@ -164,6 +167,7 @@ def _build_tool_defs(tools: list[ToolDefinition]) -> list[dict[str, Any]]:
 
 # --- Shared base for sync and async Ollama strategies ---
 
+
 class _OllamaBase:
     """Holds all config and response-parsing logic shared between sync and async."""
 
@@ -176,7 +180,7 @@ class _OllamaBase:
         done_reason = getattr(res, "done_reason", None)
         tool_calls = [
             ToolCall(
-                id=f"call_{i}",          # Ollama provides no IDs
+                id=f"call_{i}",  # Ollama provides no IDs
                 name=tc.function.name,
                 input=dict(tc.function.arguments),
             )
@@ -191,7 +195,9 @@ class _OllamaBase:
             tool_calls=tool_calls,
         )
 
-    def _parse_format_output(self, res: ChatResponse, response_model: type[BaseModel]) -> LLMStructuredResponse:
+    def _parse_format_output(
+        self, res: ChatResponse, response_model: type[BaseModel]
+    ) -> LLMStructuredResponse:
         """Parse a format-constrained response (single model, JSON schema generation)."""
         raw_content = res.message.content or ""
         done_reason = getattr(res, "done_reason", None)
@@ -209,7 +215,9 @@ class _OllamaBase:
             error=error,
         )
 
-    def _parse_tools_output(self, res: ChatResponse, response_types: dict[str, type[BaseModel]]) -> LLMStructuredResponse:
+    def _parse_tools_output(
+        self, res: ChatResponse, response_types: dict[str, type[BaseModel]]
+    ) -> LLMStructuredResponse:
         """Parse a tool-use response (multiple models)."""
         done_reason = getattr(res, "done_reason", None)
         stop_reason = DONE_REASON_MAP.get(done_reason) if done_reason else None
@@ -241,6 +249,7 @@ class _OllamaBase:
 
 # --- Sync strategy ---
 
+
 class OllamaLLMStrategy(_OllamaBase):
     def __init__(
         self,
@@ -267,7 +276,9 @@ class OllamaLLMStrategy(_OllamaBase):
         )
         return self._parse_response(res)
 
-    def send_structured_query(self, params: LLMStructuredParams) -> LLMStructuredResponse:
+    def send_structured_query(
+        self, params: LLMStructuredParams
+    ) -> LLMStructuredResponse:
         if len(params.response_models) == 1:
             res = self.client.chat(
                 model=self.model,
@@ -288,7 +299,9 @@ class OllamaLLMStrategy(_OllamaBase):
             tools=_build_tools(params.response_models),
             think=_resolve_think(params),
         )
-        return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
+        return self._parse_tools_output(
+            res, {m.__name__: m for m in params.response_models}
+        )
 
     def stream_query(self, params: LLMParams) -> Generator[StreamEvent, None, None]:
         """Yields StreamToken per token, then a final StreamDone with full metadata."""
@@ -325,6 +338,7 @@ class OllamaLLMStrategy(_OllamaBase):
 
 # --- Async strategy ---
 
+
 class AsyncOllamaLLMStrategy(_OllamaBase):
     def __init__(
         self,
@@ -351,7 +365,9 @@ class AsyncOllamaLLMStrategy(_OllamaBase):
         )
         return self._parse_response(res)
 
-    async def send_structured_query(self, params: LLMStructuredParams) -> LLMStructuredResponse:
+    async def send_structured_query(
+        self, params: LLMStructuredParams
+    ) -> LLMStructuredResponse:
         if len(params.response_models) == 1:
             res = await self.client.chat(
                 model=self.model,
@@ -369,9 +385,13 @@ class AsyncOllamaLLMStrategy(_OllamaBase):
             tools=_build_tools(params.response_models),
             think=_resolve_think(params),
         )
-        return self._parse_tools_output(res, {m.__name__: m for m in params.response_models})
+        return self._parse_tools_output(
+            res, {m.__name__: m for m in params.response_models}
+        )
 
-    async def stream_query(self, params: LLMParams) -> AsyncGenerator[StreamEvent, None]:
+    async def stream_query(
+        self, params: LLMParams
+    ) -> AsyncGenerator[StreamEvent, None]:
         """Yields StreamToken per token, then a final StreamDone with full metadata."""
         full_content = ""
         thinking_text = ""

@@ -18,7 +18,7 @@ class Person(BaseModel):
 
 
 class Sentiment(BaseModel):
-    label: str         # positive / negative / neutral
+    label: str  # positive / negative / neutral
     confidence: float  # 0.0 – 1.0
 
 

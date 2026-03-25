@@ -1,4 +1,5 @@
 """Internal shared utilities — not part of the public API."""
+
 import json
 import logging
 from typing import Any

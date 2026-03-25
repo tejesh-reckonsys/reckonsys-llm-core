@@ -1,9 +1,8 @@
 import json
 import logging
 import os
-from typing import Any, AsyncGenerator, Generator, cast
-
-from pydantic import BaseModel
+from collections.abc import AsyncGenerator, Generator
+from typing import Any, cast
 
 from anthropic import Anthropic, AnthropicBedrock, AsyncAnthropic, AsyncAnthropicBedrock
 from anthropic.types import (
@@ -16,9 +15,12 @@ from anthropic.types import (
     ThinkingBlock,
     ToolParam,
     ToolUseBlock,
+)
+from anthropic.types import (
     StopReason as AnthropicStopReason,
 )
 from anthropic.types.messages.batch_create_params import Request as BatchCreateRequest
+from pydantic import BaseModel
 
 from reckonsys_llm_core._utils import parse_json_response, validate_dict_response
 from reckonsys_llm_core.types import (
@@ -335,7 +337,7 @@ class _ClaudeBase:
                 for c in block.citations or []:
                     cited_text = getattr(c, "cited_text", "")
                     if isinstance(
-                        c, (CitationCharLocation, CitationContentBlockLocation)
+                        c, CitationCharLocation | CitationContentBlockLocation
                     ):
                         citations.append(
                             Citation(
@@ -479,7 +481,7 @@ class ClaudeLLMStrategy(_ClaudeBase):
                     for c in block.citations or []:
                         cited_text = getattr(c, "cited_text", "")
                         if isinstance(
-                            c, (CitationCharLocation, CitationContentBlockLocation)
+                            c, CitationCharLocation | CitationContentBlockLocation
                         ):
                             citations.append(
                                 Citation(
@@ -574,7 +576,7 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
                     for c in block.citations or []:
                         cited_text = getattr(c, "cited_text", "")
                         if isinstance(
-                            c, (CitationCharLocation, CitationContentBlockLocation)
+                            c, CitationCharLocation | CitationContentBlockLocation
                         ):
                             citations.append(
                                 Citation(

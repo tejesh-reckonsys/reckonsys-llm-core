@@ -36,7 +36,9 @@ response = client.query(
             role="user",
             content=[
                 DocumentContent(text=DOC.strip(), title="Python Overview"),
-                TextContent(text="Who created Python, and what was it named after? Cite your sources."),
+                TextContent(
+                    text="Who created Python, and what was it named after? Cite your sources."
+                ),
             ],
         )
     ],
@@ -48,7 +50,7 @@ print()
 if response.citations:
     print(f"Citations ({len(response.citations)}):")
     for i, c in enumerate(response.citations, 1):
-        print(f"  [{i}] \"{c.cited_text}\"")
+        print(f'  [{i}] "{c.cited_text}"')
         if c.document_title:
             print(f"      from: {c.document_title} (doc index {c.document_index})")
 else:
@@ -60,7 +62,9 @@ print()
 # 2. Multiple documents — Claude chooses which to cite
 # ---------------------------------------------------------------------------
 
-DOC_A = "The Eiffel Tower is located in Paris, France. It was built between 1887 and 1889."
+DOC_A = (
+    "The Eiffel Tower is located in Paris, France. It was built between 1887 and 1889."
+)
 DOC_B = "The Colosseum is an ancient amphitheatre in the centre of Rome, Italy. It was completed in 80 AD."
 
 response2 = client.query(
@@ -82,7 +86,7 @@ print()
 if response2.citations:
     print(f"Citations ({len(response2.citations)}):")
     for i, c in enumerate(response2.citations, 1):
-        print(f"  [{i}] \"{c.cited_text}\"")
+        print(f'  [{i}] "{c.cited_text}"')
         if c.document_title:
             print(f"      from: {c.document_title} (doc index {c.document_index})")
 else:

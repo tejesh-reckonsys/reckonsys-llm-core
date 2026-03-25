@@ -57,10 +57,12 @@ async def concurrent_queries() -> None:
         "What is the capital of Japan?",
         "Name one planet in our solar system.",
     ]
-    responses = await asyncio.gather(*[
-        client.query(messages=[ChatMessage(role="user", content=q)])
-        for q in questions
-    ])
+    responses = await asyncio.gather(
+        *[
+            client.query(messages=[ChatMessage(role="user", content=q)])
+            for q in questions
+        ]
+    )
     print("[concurrent_queries]")
     for q, r in zip(questions, responses):
         print(f"  {q!r}  →  {r.content.strip()!r}")

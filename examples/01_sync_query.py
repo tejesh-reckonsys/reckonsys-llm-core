@@ -26,10 +26,12 @@ print("Stop reason:", response.stop_reason)
 
 # With extended thinking
 response = client.query(
-    messages=[ChatMessage(
-        role="user",
-        content="A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost?",
-    )],
+    messages=[
+        ChatMessage(
+            role="user",
+            content="A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost?",
+        )
+    ],
     thinking=ThinkingConfig(enabled=True, budget_tokens=2000),
 )
 print("\n[Extended thinking]")

@@ -17,7 +17,7 @@ Requires: ANTHROPIC_API_KEY
 import ast
 import asyncio
 import operator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from reckonsys_llm_core import (
@@ -80,13 +80,14 @@ def _safe_eval(expr: str) -> float:
     def _eval(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
             return float(node.value)
         if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPS:
             return _SAFE_OPS[type(node.op)](_eval(node.left), _eval(node.right))
         if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
             return _SAFE_OPS[type(node.op)](_eval(node.operand))
         raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
     return _eval(ast.parse(expr, mode="eval"))
 
 
@@ -97,7 +98,7 @@ def tool_executor(name: str, inputs: dict[str, Any]) -> str:
         except Exception as e:
             return f"Error: {e}"
     if name == "get_current_time":
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
     return f"Unknown tool: {name}"
 
 
@@ -105,16 +106,19 @@ def tool_executor(name: str, inputs: dict[str, Any]) -> str:
 # Sync agent
 # ---------------------------------------------------------------------------
 
+
 def run_sync() -> None:
     client = LLMClient(
         ClaudeLLMStrategy(client=create_claude_client(), model="claude-opus-4-6")
     )
 
     response = client.run_agent(
-        messages=[ChatMessage(
-            role="user",
-            content="What is (123 * 456) + (789 / 3)? Also, what time is it right now?",
-        )],
+        messages=[
+            ChatMessage(
+                role="user",
+                content="What is (123 * 456) + (789 / 3)? Also, what time is it right now?",
+            )
+        ],
         tools=TOOLS,
         tool_executor=tool_executor,
     )
@@ -125,16 +129,21 @@ def run_sync() -> None:
 # Async agent
 # ---------------------------------------------------------------------------
 
+
 async def run_async() -> None:
     client = AsyncLLMClient(
-        AsyncClaudeLLMStrategy(client=create_async_claude_client(), model="claude-opus-4-6")
+        AsyncClaudeLLMStrategy(
+            client=create_async_claude_client(), model="claude-opus-4-6"
+        )
     )
 
     response = await client.arun_agent(
-        messages=[ChatMessage(
-            role="user",
-            content="If I invest $10,000 at 7% annual return, what will it be worth after 10 years?",
-        )],
+        messages=[
+            ChatMessage(
+                role="user",
+                content="If I invest $10,000 at 7% annual return, what will it be worth after 10 years?",
+            )
+        ],
         tools=TOOLS,
         tool_executor=tool_executor,  # sync executor works fine with arun_agent
     )
