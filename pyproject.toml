@@ -47,7 +47,4 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.pyright]
-executionEnvironments = [
-    { root = "src", typeCheckingMode = "standard" },
-    { root = "examples", typeCheckingMode = "basic" },
-]
+typeCheckingMode = "standard"
