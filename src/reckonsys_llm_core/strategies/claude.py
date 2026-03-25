@@ -13,7 +13,6 @@ from anthropic.types import (
     Message,
     MessageParam,
     TextBlock,
-    TextBlockParam,
     ThinkingBlock,
     ToolParam,
     ToolUseBlock,
@@ -42,7 +41,6 @@ from reckonsys_llm_core.types import (
     StreamEvent,
     StreamToken,
     TextContent,
-    ThinkingConfig,
     TokenUsage,
     ToolCall,
     ToolChoice,
@@ -102,7 +100,13 @@ def _content_to_api(
     """
     if isinstance(content, str):
         if cache:
-            return [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+            return [
+                {
+                    "type": "text",
+                    "text": content,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
         return content
 
     blocks: list[ContentBlockParam] = []
@@ -131,7 +135,11 @@ def _content_to_api(
         elif isinstance(item, DocumentContent):
             doc_block: dict[str, Any] = {
                 "type": "document",
-                "source": {"type": "text", "media_type": "text/plain", "data": item.text},
+                "source": {
+                    "type": "text",
+                    "media_type": "text/plain",
+                    "data": item.text,
+                },
             }
             if item.title:
                 doc_block["title"] = item.title
@@ -183,11 +191,10 @@ def _build_kwargs(
         "max_tokens": params.max_tokens or default_max_tokens,
     }
     if params.system:
-        kwargs["system"] = [
-            TextBlockParam(
-                text=params.system, type="text", cache_control={"type": "ephemeral"}
-            )
-        ]
+        block: dict[str, Any] = {"type": "text", "text": params.system}
+        if params.cache_system:
+            block["cache_control"] = {"type": "ephemeral"}
+        kwargs["system"] = [block]
     if params.temperature is not None:
         kwargs["temperature"] = params.temperature
     if params.top_p is not None:
@@ -327,21 +334,29 @@ class _ClaudeBase:
                 text = block.text
                 for c in block.citations or []:
                     cited_text = getattr(c, "cited_text", "")
-                    if isinstance(c, (CitationCharLocation, CitationContentBlockLocation)):
-                        citations.append(Citation(
-                            cited_text=cited_text,
-                            document_title=c.document_title,
-                            document_index=c.document_index,
-                        ))
+                    if isinstance(
+                        c, (CitationCharLocation, CitationContentBlockLocation)
+                    ):
+                        citations.append(
+                            Citation(
+                                cited_text=cited_text,
+                                document_title=c.document_title,
+                                document_index=c.document_index,
+                            )
+                        )
                     else:
                         url = getattr(c, "url", None)
                         title = getattr(c, "title", None)
                         if cited_text or url:
-                            citations.append(Citation(cited_text=cited_text, url=url, title=title))
+                            citations.append(
+                                Citation(cited_text=cited_text, url=url, title=title)
+                            )
             elif isinstance(block, ThinkingBlock):
                 thinking = block.thinking
             elif isinstance(block, ToolUseBlock):
-                tool_calls.append(ToolCall(id=block.id, name=block.name, input=dict(block.input)))
+                tool_calls.append(
+                    ToolCall(id=block.id, name=block.name, input=dict(block.input))
+                )
 
         return LLMResponse(
             content=text,
@@ -463,23 +478,33 @@ class ClaudeLLMStrategy(_ClaudeBase):
                 elif isinstance(block, TextBlock):
                     for c in block.citations or []:
                         cited_text = getattr(c, "cited_text", "")
-                        if isinstance(c, (CitationCharLocation, CitationContentBlockLocation)):
-                            citations.append(Citation(
-                                cited_text=cited_text,
-                                document_title=c.document_title,
-                                document_index=c.document_index,
-                            ))
+                        if isinstance(
+                            c, (CitationCharLocation, CitationContentBlockLocation)
+                        ):
+                            citations.append(
+                                Citation(
+                                    cited_text=cited_text,
+                                    document_title=c.document_title,
+                                    document_index=c.document_index,
+                                )
+                            )
                         else:
                             url = getattr(c, "url", None)
                             title = getattr(c, "title", None)
                             if cited_text or url:
-                                citations.append(Citation(cited_text=cited_text, url=url, title=title))
+                                citations.append(
+                                    Citation(
+                                        cited_text=cited_text, url=url, title=title
+                                    )
+                                )
 
         yield StreamDone(
             full_content=full_content,
             usage=_map_usage(final),
             model=self.model,
-            stop_reason=STOP_REASON_MAP.get(final.stop_reason) if final.stop_reason else None,
+            stop_reason=STOP_REASON_MAP.get(final.stop_reason)
+            if final.stop_reason
+            else None,
             thinking=thinking_text,
             citations=citations,
         )
@@ -548,17 +573,25 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
                 elif isinstance(block, TextBlock):
                     for c in block.citations or []:
                         cited_text = getattr(c, "cited_text", "")
-                        if isinstance(c, (CitationCharLocation, CitationContentBlockLocation)):
-                            citations.append(Citation(
-                                cited_text=cited_text,
-                                document_title=c.document_title,
-                                document_index=c.document_index,
-                            ))
+                        if isinstance(
+                            c, (CitationCharLocation, CitationContentBlockLocation)
+                        ):
+                            citations.append(
+                                Citation(
+                                    cited_text=cited_text,
+                                    document_title=c.document_title,
+                                    document_index=c.document_index,
+                                )
+                            )
                         else:
                             url = getattr(c, "url", None)
                             title = getattr(c, "title", None)
                             if cited_text or url:
-                                citations.append(Citation(cited_text=cited_text, url=url, title=title))
+                                citations.append(
+                                    Citation(
+                                        cited_text=cited_text, url=url, title=title
+                                    )
+                                )
 
         yield StreamDone(
             full_content=full_content,

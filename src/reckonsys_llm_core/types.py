@@ -205,6 +205,7 @@ class ChatMessage:
 class LLMParams:
     messages: list[ChatMessage]
     system: str | None = None
+    cache_system: bool = True  # cache the system prompt (Claude only)
     temperature: float | None = None
     max_tokens: int | None = None
     top_p: float | None = None

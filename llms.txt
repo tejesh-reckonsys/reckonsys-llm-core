@@ -356,6 +356,19 @@ Cache a message (Claude prompt caching):
 msg = ChatMessage(role="user", content="...", cache=True)
 ```
 
+Cache only specific messages (e.g. first of two user turns):
+```python
+messages=[
+    ChatMessage(role="user", content="<large context>", cache=True),  # cached
+    ChatMessage(role="user", content="short follow-up"),              # not cached
+]
+```
+
+The system prompt is cached by default. Disable with `cache_system=False`:
+```python
+client.query(messages=messages, system="...", cache_system=False)
+```
+
 ---
 
 ## Key response fields
