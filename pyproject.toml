@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "reckonsys-llm-core"
-version = "0.3.2"
+version = "0.4.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,12 +19,16 @@ claude = [
 ollama = [
     "ollama>=0.6.1",
 ]
+openai = [
+    "openai>=2.29.0",
+]
 templates = [
     "jinja2>=3.1",
 ]
 all = [
     "anthropic>=0.84.0",
     "ollama>=0.6.1",
+    "openai>=2.29.0",
     "jinja2>=3.1",
 ]
 

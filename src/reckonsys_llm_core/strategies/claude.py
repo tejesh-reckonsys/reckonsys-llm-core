@@ -16,9 +16,6 @@ from anthropic.types import (
     ToolParam,
     ToolUseBlock,
 )
-from anthropic.types import (
-    StopReason as AnthropicStopReason,
-)
 from anthropic.types.messages.batch_create_params import Request as BatchCreateRequest
 from pydantic import BaseModel
 
@@ -53,11 +50,12 @@ from reckonsys_llm_core.types import (
 
 logger = logging.getLogger(__name__)
 
-STOP_REASON_MAP: dict[AnthropicStopReason, StopReason] = {
+STOP_REASON_MAP: dict[str, StopReason] = {
     "end_turn": StopReason.END_TURN,
     "tool_use": StopReason.TOOL_USE,
     "max_tokens": StopReason.MAX_TOKENS,
     "stop_sequence": StopReason.STOP_SEQUENCE,
+    "model_context_window_exceeded": StopReason.MAX_TOKENS,
 }
 
 DEFAULT_MAX_TOKENS = 8000
@@ -204,10 +202,13 @@ def _build_kwargs(
     if params.stop:
         kwargs["stop_sequences"] = params.stop
     if params.thinking and params.thinking.enabled:
-        kwargs["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": params.thinking.budget_tokens,
-        }
+        if params.thinking.effort:
+            kwargs["thinking"] = {"type": "enabled", "effort": params.thinking.effort}
+        else:
+            kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": params.thinking.budget_tokens,
+            }
     return kwargs
 
 
@@ -224,21 +225,16 @@ def _extract_text_and_thinking(message: Message) -> tuple[str, str | None]:
 
 def _build_tool_params(
     tools: list[ToolDefinition],
-) -> tuple[list[Any], list[str]]:
-    """
-    Convert ToolDefinition list to (api_tool_params, required_betas).
+) -> list[Any]:
+    """Convert ToolDefinition list to API tool params.
 
-    Built-in tools (raw_config set) are passed as-is; betas are auto-detected.
+    Built-in tools (raw_config set) are passed as-is.
     Custom tools are converted to ToolParam.
     """
     tool_params: list[Any] = []
-    betas: list[str] = []
     for t in tools:
         if t.raw_config is not None:
             tool_params.append(t.raw_config)
-            if t.raw_config.get("type") == "web_search_20250305":
-                if "web-search-2025-03-05" not in betas:
-                    betas.append("web-search-2025-03-05")
         else:
             tool_params.append(
                 ToolParam(
@@ -247,7 +243,7 @@ def _build_tool_params(
                     input_schema=t.input_schema,
                 )
             )
-    return tool_params, betas
+    return tool_params
 
 
 def _apply_tool_choice(kwargs: dict[str, Any], tool_choice: ToolChoice | None) -> None:
@@ -439,10 +435,7 @@ class ClaudeLLMStrategy(_ClaudeBase):
     def send_query(self, params: LLMParams) -> LLMResponse:
         kwargs = self._kwargs(params)
         if params.tools:
-            tool_params, betas = _build_tool_params(params.tools)
-            kwargs["tools"] = tool_params
-            if betas:
-                kwargs["betas"] = betas
+            kwargs["tools"] = _build_tool_params(params.tools)
             _apply_tool_choice(kwargs, params.tool_choice)
         res = cast(Message, self.client.messages.create(**kwargs))
         return self._parse_response(res)
@@ -531,10 +524,7 @@ class AsyncClaudeLLMStrategy(_ClaudeBase):
     async def send_query(self, params: LLMParams) -> LLMResponse:
         kwargs = self._kwargs(params)
         if params.tools:
-            tool_params, betas = _build_tool_params(params.tools)
-            kwargs["tools"] = tool_params
-            if betas:
-                kwargs["betas"] = betas
+            kwargs["tools"] = _build_tool_params(params.tools)
             _apply_tool_choice(kwargs, params.tool_choice)
         res = cast(Message, await self.client.messages.create(**kwargs))
         return self._parse_response(res)
@@ -770,6 +760,19 @@ live web access. Requires an Anthropic account plan that includes web search.
         tools=[WEB_SEARCH_TOOL],
     )
 """
+
+
+WEB_FETCH_TOOL = ToolDefinition(
+    name="web_fetch",
+    raw_config={"type": "web_fetch_20250305", "name": "web_fetch"},
+)
+"""Claude's built-in web fetch tool. Fetches full content from a URL or PDF."""
+
+MEMORY_TOOL = ToolDefinition(
+    name="memory",
+    raw_config={"type": "memory_20250110", "name": "memory"},
+)
+"""Claude's built-in memory tool. Store and retrieve information across conversations."""
 
 
 # --- Factory helpers ---

@@ -31,7 +31,10 @@ class TokenUsage:
 class ThinkingConfig:
     enabled: bool = False
     budget_tokens: int = 1024
-    reasoning_effort: Literal["low", "medium", "high"] | None = None  # for OpenAI
+    effort: Literal["low", "medium", "high"] | None = None  # for Claude Opus 4.6+
+    reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"] | None = (
+        None  # for OpenAI
+    )
 
 
 # --- Tool types ---

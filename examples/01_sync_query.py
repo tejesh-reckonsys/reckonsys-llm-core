@@ -32,7 +32,7 @@ response = client.query(
             content="A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost?",
         )
     ],
-    thinking=ThinkingConfig(enabled=True, budget_tokens=2000),
+    thinking=ThinkingConfig(enabled=True, effort="medium"),
 )
 print("\n[Extended thinking]")
 if response.thinking:

@@ -4,8 +4,7 @@ Claude's built-in web search tool.
 Pass WEB_SEARCH_TOOL in the tools list and Claude searches the web automatically.
 Anthropic executes the search server-side — no tool_executor needed.
 
-The library handles the betas header automatically when it detects
-the web_search_20250305 tool type.
+Web search is GA as of Feb 17, 2026 — no beta header required.
 
     python examples/11_claude_web_search.py
 
