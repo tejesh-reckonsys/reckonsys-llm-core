@@ -1,6 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "reckonsys-llm-core"
-version = "0.3.0"
+version = "0.3.2"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"

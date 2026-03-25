@@ -380,7 +380,8 @@ msg = ChatMessage(role="user", content="...", cache=True)
 - **Forgetting to persist `batch_id`** — call `client.status(batch_id)` / `client.results(batch_id)` with the ID you saved, not a `Batch` object.
 - **`strict=True` with multiple `response_models`** — strict mode only works for a single model; it silently falls back to tool-use with multiple.
 - **Using `tool_executor` for `WEB_SEARCH_TOOL`** — web search is executed server-side by Claude. Your executor is called for all *other* tools; just return `""` or ignore it for web search.
-- **Ollama + streaming** — not supported by the Ollama strategy.
+- **Ollama + URL images** — Ollama only supports base64 images; URL images are silently skipped with a warning.
+- **`DocumentContent` with Ollama** — `DocumentContent` is Claude-only. If you develop with Claude (using `DocumentContent` for citations) and switch to Ollama, the document blocks are silently dropped — no error is raised, but the model answers without that context. Always pass document text as a plain string or `TextContent` when targeting Ollama.
 - **`tool_from_function` with `*args` / `**kwargs`** — variadic parameters are silently ignored when generating the schema.
 
 ---
