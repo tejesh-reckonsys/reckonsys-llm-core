@@ -13,6 +13,7 @@ Supports sync/async execution, streaming, structured output, batch processing, t
 - [Ollama](providers/ollama.md)
 
 ### Guides
+- [Client Helpers](guides/helpers.md)
 - [Structured Output](guides/structured-output.md)
 - [Streaming](guides/streaming.md)
 - [Tool Calling & Agentic Loop](guides/tool-calling.md)
@@ -53,10 +54,9 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ```python
-from reckonsys_llm_core import LLMClient, ChatMessage
-from reckonsys_llm_core.strategies.claude import ClaudeLLMStrategy, create_claude_client
+from reckonsys_llm_core import create_llm, ChatMessage
 
-client = LLMClient(ClaudeLLMStrategy(create_claude_client(), model="claude-opus-4-6"))
+client = create_llm("claude", "claude-opus-4-6")
 
 response = client.query(
     messages=[ChatMessage(role="user", content="Hello!")],
@@ -65,4 +65,4 @@ response = client.query(
 print(response.content)
 ```
 
-See the [examples/](../examples/) directory for runnable scripts covering every feature.
+See [Client Helpers](guides/helpers.md) for all providers and async/batch variants, or the [examples/](../examples/) directory for runnable scripts covering every feature.

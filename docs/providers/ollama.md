@@ -10,6 +10,8 @@ pip install "reckonsys-llm-core[ollama]"
 
 Ollama must be running locally (or on a reachable host). Default endpoint: `http://localhost:11434`.
 
+> **Tip:** For the quickest setup, use the [Client Helpers](../guides/helpers.md) — e.g. `create_llm("ollama", "llama3.2")`.
+
 ```bash
 # Install and start Ollama
 ollama serve

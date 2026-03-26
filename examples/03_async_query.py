@@ -10,11 +10,7 @@ import asyncio
 
 from pydantic import BaseModel
 
-from reckonsys_llm_core import AsyncLLMClient, ChatMessage, RetryContext
-from reckonsys_llm_core.strategies.claude import (
-    AsyncClaudeLLMStrategy,
-    create_async_claude_client,
-)
+from reckonsys_llm_core import ChatMessage, RetryContext, create_async_llm
 
 
 class Person(BaseModel):
@@ -22,14 +18,10 @@ class Person(BaseModel):
     age: int
 
 
-strategy = AsyncClaudeLLMStrategy(
-    client=create_async_claude_client(),
-    model="claude-opus-4-6",
-)
+client = create_async_llm("claude", "claude-opus-4-6")
 
 
 async def plain_query() -> None:
-    client = AsyncLLMClient(strategy)
     response = await client.query(
         messages=[ChatMessage(role="user", content="What is the capital of Germany?")],
         system="Answer concisely.",
@@ -42,8 +34,10 @@ async def structured_with_retry() -> None:
         # Hook this up to OTel, Prometheus, or your eval dataset
         print(f"  [retry] attempt={ctx.attempt} error={ctx.error[:80]}")
 
-    client = AsyncLLMClient(strategy, max_retries=2, on_retry=on_retry)
-    response = await client.query_structured(
+    retry_client = create_async_llm(
+        "claude", "claude-opus-4-6", max_retries=2, on_retry=on_retry
+    )
+    response = await retry_client.query_structured(
         messages=[ChatMessage(role="user", content="Extract: Carol is 25 years old.")],
         response_models=[Person],
     )
@@ -51,7 +45,6 @@ async def structured_with_retry() -> None:
 
 
 async def concurrent_queries() -> None:
-    client = AsyncLLMClient(strategy)
     questions = [
         "What is 2 + 2?",
         "What is the capital of Japan?",

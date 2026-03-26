@@ -7,6 +7,12 @@ from reckonsys_llm_core.client import (
     LLMClient,
 )
 from reckonsys_llm_core.fn_tools import ToolKit, from_tools, tool_from_function
+from reckonsys_llm_core.helpers import (
+    create_async_batch_llm,
+    create_async_llm,
+    create_batch_llm,
+    create_llm,
+)
 from reckonsys_llm_core.strategy import (
     AsyncBatchLLMStrategy,
     AsyncLLMStrategy,
@@ -105,4 +111,9 @@ __all__ = [
     "ToolKit",
     # LLM context
     "get_llms_txt",
+    # One-call helpers
+    "create_llm",
+    "create_async_llm",
+    "create_batch_llm",
+    "create_async_batch_llm",
 ]

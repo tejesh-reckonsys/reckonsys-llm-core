@@ -15,14 +15,8 @@ Requires: ANTHROPIC_API_KEY
 
 import asyncio
 
-from reckonsys_llm_core import AsyncLLMClient, ChatMessage, LLMClient
-from reckonsys_llm_core.strategies.claude import (
-    WEB_SEARCH_TOOL,
-    AsyncClaudeLLMStrategy,
-    ClaudeLLMStrategy,
-    create_async_claude_client,
-    create_claude_client,
-)
+from reckonsys_llm_core import ChatMessage, create_async_llm, create_llm
+from reckonsys_llm_core.strategies.claude import WEB_SEARCH_TOOL
 
 MODEL = "claude-opus-4-6"
 
@@ -30,7 +24,7 @@ MODEL = "claude-opus-4-6"
 # Sync — single question
 # ---------------------------------------------------------------------------
 
-sync_client = LLMClient(ClaudeLLMStrategy(client=create_claude_client(), model=MODEL))
+sync_client = create_llm("claude", MODEL)
 
 response = sync_client.query(
     messages=[
@@ -44,9 +38,7 @@ print("[web_search sync]", response.content)
 # Async — multi-turn with search context preserved
 # ---------------------------------------------------------------------------
 
-async_client = AsyncLLMClient(
-    AsyncClaudeLLMStrategy(client=create_async_claude_client(), model=MODEL)
-)
+async_client = create_async_llm("claude", MODEL)
 
 
 async def multi_turn_search() -> None:

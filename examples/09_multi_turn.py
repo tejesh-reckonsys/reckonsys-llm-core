@@ -16,14 +16,11 @@ Requires: ANTHROPIC_API_KEY
 
 import sys
 
-from reckonsys_llm_core import ChatMessage, LLMClient
-from reckonsys_llm_core.strategies.claude import ClaudeLLMStrategy, create_claude_client
+from reckonsys_llm_core import ChatMessage, create_llm
 
 SYSTEM = "You are a helpful assistant. Be concise."
 
-client = LLMClient(
-    ClaudeLLMStrategy(client=create_claude_client(), model="claude-opus-4-6")
-)
+client = create_llm("claude", "claude-opus-4-6")
 
 
 # ---------------------------------------------------------------------------

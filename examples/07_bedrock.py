@@ -9,13 +9,7 @@ Install:  pip install "reckonsys-llm-core[claude]"
 
 import asyncio
 
-from reckonsys_llm_core import AsyncLLMClient, ChatMessage, LLMClient
-from reckonsys_llm_core.strategies.claude import (
-    AsyncClaudeLLMStrategy,
-    ClaudeLLMStrategy,
-    create_async_bedrock_client,
-    create_bedrock_client,
-)
+from reckonsys_llm_core import ChatMessage, create_async_llm, create_llm
 
 MODEL = "anthropic.claude-opus-4-6-20251101-v1:0"
 
@@ -23,12 +17,7 @@ MODEL = "anthropic.claude-opus-4-6-20251101-v1:0"
 # Sync
 # ---------------------------------------------------------------------------
 
-sync_client = LLMClient(
-    ClaudeLLMStrategy(
-        client=create_bedrock_client(region="us-west-2"),
-        model=MODEL,
-    )
-)
+sync_client = create_llm("claude_bedrock", MODEL, region="us-west-2")
 
 response = sync_client.query(
     messages=[ChatMessage(role="user", content="What is the capital of France?")],
@@ -41,12 +30,7 @@ print("[bedrock_sync]", response.content)
 # Async
 # ---------------------------------------------------------------------------
 
-async_client = AsyncLLMClient(
-    AsyncClaudeLLMStrategy(
-        client=create_async_bedrock_client(region="us-west-2"),
-        model=MODEL,
-    )
-)
+async_client = create_async_llm("claude_bedrock", MODEL, region="us-west-2")
 
 
 async def main() -> None:

@@ -21,16 +21,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from reckonsys_llm_core import (
-    AsyncLLMClient,
     ChatMessage,
-    LLMClient,
     ToolDefinition,
-)
-from reckonsys_llm_core.strategies.claude import (
-    AsyncClaudeLLMStrategy,
-    ClaudeLLMStrategy,
-    create_async_claude_client,
-    create_claude_client,
+    create_async_llm,
+    create_llm,
 )
 
 # ---------------------------------------------------------------------------
@@ -108,9 +102,7 @@ def tool_executor(name: str, inputs: dict[str, Any]) -> str:
 
 
 def run_sync() -> None:
-    client = LLMClient(
-        ClaudeLLMStrategy(client=create_claude_client(), model="claude-opus-4-6")
-    )
+    client = create_llm("claude", "claude-opus-4-6")
 
     response = client.run_agent(
         messages=[
@@ -131,11 +123,7 @@ def run_sync() -> None:
 
 
 async def run_async() -> None:
-    client = AsyncLLMClient(
-        AsyncClaudeLLMStrategy(
-            client=create_async_claude_client(), model="claude-opus-4-6"
-        )
-    )
+    client = create_async_llm("claude", "claude-opus-4-6")
 
     response = await client.arun_agent(
         messages=[

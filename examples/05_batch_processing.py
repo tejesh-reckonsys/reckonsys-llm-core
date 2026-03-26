@@ -16,17 +16,11 @@ persisting the batch_id.
 import asyncio
 
 from reckonsys_llm_core import (
-    AsyncBatchLLMClient,
-    BatchLLMClient,
     BatchRequest,
     ChatMessage,
     LLMParams,
-)
-from reckonsys_llm_core.strategies.claude import (
-    AsyncClaudeBatchStrategy,
-    ClaudeBatchStrategy,
-    create_async_claude_client,
-    create_claude_client,
+    create_async_batch_llm,
+    create_batch_llm,
 )
 
 REQUESTS = [
@@ -51,9 +45,7 @@ REQUESTS = [
 
 
 def sync_batch() -> None:
-    client = BatchLLMClient(
-        ClaudeBatchStrategy(client=create_claude_client(), model="claude-opus-4-6")
-    )
+    client = create_batch_llm("claude", "claude-opus-4-6")
 
     batch = client.submit(REQUESTS)
     print(f"[sync_batch] submitted  batch_id={batch.batch_id!r}")
@@ -76,11 +68,7 @@ def sync_batch() -> None:
 
 
 async def async_batch() -> None:
-    client = AsyncBatchLLMClient(
-        AsyncClaudeBatchStrategy(
-            client=create_async_claude_client(), model="claude-opus-4-6"
-        )
-    )
+    client = create_async_batch_llm("claude", "claude-opus-4-6")
 
     batch = await client.submit(REQUESTS)
     print(f"[async_batch] submitted  batch_id={batch.batch_id!r}")

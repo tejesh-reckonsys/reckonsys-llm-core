@@ -77,7 +77,7 @@ from reckonsys_llm_core.strategies.openai import OpenAILLMStrategy, create_opena
 
 strategy = OpenAILLMStrategy(
     client=create_openai_client(),
-    model="gpt-4o",
+    model="gpt-5.4-mini",
     strict=True,
 )
 ```

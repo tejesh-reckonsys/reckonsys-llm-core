@@ -13,11 +13,7 @@ import asyncio
 
 from pydantic import BaseModel
 
-from reckonsys_llm_core import AsyncLLMClient, ChatMessage, LLMClient
-from reckonsys_llm_core.strategies.ollama import (
-    AsyncOllamaLLMStrategy,
-    OllamaLLMStrategy,
-)
+from reckonsys_llm_core import ChatMessage, create_async_llm, create_llm
 
 
 class Person(BaseModel):
@@ -29,7 +25,7 @@ class Person(BaseModel):
 # Sync
 # ---------------------------------------------------------------------------
 
-sync_client = LLMClient(OllamaLLMStrategy(model="llama3.2"))
+sync_client = create_llm("ollama", "llama3.2")
 
 response = sync_client.query(
     messages=[ChatMessage(role="user", content="Hello!")],
@@ -44,7 +40,7 @@ response = sync_client.query_structured(
 print("[ollama_sync_structured]", response.content)
 
 # Custom host
-# client = LLMClient(OllamaLLMStrategy(model="llama3.2", host="http://my-server:11434"))
+# client = create_llm("ollama", "llama3.2", host="http://my-server:11434")
 
 # Extended thinking (deepseek-r1, qwen3, etc.)
 # response = sync_client.query(
@@ -59,7 +55,7 @@ print("[ollama_sync_structured]", response.content)
 # Async
 # ---------------------------------------------------------------------------
 
-async_client = AsyncLLMClient(AsyncOllamaLLMStrategy(model="llama3.2"))
+async_client = create_async_llm("ollama", "llama3.2")
 
 
 async def main() -> None:

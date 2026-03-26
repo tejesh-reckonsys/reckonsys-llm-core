@@ -101,7 +101,7 @@ The OpenAI batch strategy uploads a JSONL file, then creates a batch pointing at
 from reckonsys_llm_core import BatchLLMClient, BatchRequest, BatchStatus, LLMParams, ChatMessage
 from reckonsys_llm_core.strategies.openai import OpenAIBatchStrategy, create_openai_client
 
-strategy = OpenAIBatchStrategy(create_openai_client(), model="gpt-4o")
+strategy = OpenAIBatchStrategy(create_openai_client(), model="gpt-5.4-mini")
 client = BatchLLMClient(strategy)
 
 batch = client.submit([

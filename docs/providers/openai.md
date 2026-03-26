@@ -12,6 +12,8 @@ pip install "reckonsys-llm-core[openai]"   # openai>=2.0.0
 
 Set `OPENAI_API_KEY` in your environment (or pass it explicitly via `create_openai_client(api_key=...)`).
 
+> **Tip:** For the quickest setup, use the [Client Helpers](../guides/helpers.md) — e.g. `create_llm("openai", "gpt-5.4-mini")`.
+
 ---
 
 ## Current models

@@ -8,8 +8,7 @@ Requires: ANTHROPIC_API_KEY
 
 from pydantic import BaseModel
 
-from reckonsys_llm_core import ChatMessage, LLMClient
-from reckonsys_llm_core.strategies.claude import ClaudeLLMStrategy, create_claude_client
+from reckonsys_llm_core import ChatMessage, create_llm
 
 
 class Person(BaseModel):
@@ -22,9 +21,7 @@ class Sentiment(BaseModel):
     confidence: float  # 0.0 – 1.0
 
 
-client = LLMClient(
-    ClaudeLLMStrategy(client=create_claude_client(), model="claude-opus-4-6")
-)
+client = create_llm("claude", "claude-opus-4-6")
 
 # Tool-use (default) — works with any provider
 response = client.query_structured(
@@ -34,13 +31,7 @@ response = client.query_structured(
 print("[tool-use]", response.content)
 
 # Strict / native JSON schema — single model uses output_config (no tools)
-strict_client = LLMClient(
-    ClaudeLLMStrategy(
-        client=create_claude_client(),
-        model="claude-sonnet-4-6",
-        strict=True,
-    )
-)
+strict_client = create_llm("claude", "claude-sonnet-4-6", strict=True)
 response = strict_client.query_structured(
     messages=[ChatMessage(role="user", content="Extract: Bob is 42 years old.")],
     response_models=[Person],

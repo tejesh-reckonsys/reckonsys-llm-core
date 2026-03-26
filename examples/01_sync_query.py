@@ -6,14 +6,9 @@ Synchronous plain text query.
 Requires: ANTHROPIC_API_KEY
 """
 
-from reckonsys_llm_core import ChatMessage, LLMClient, ThinkingConfig
-from reckonsys_llm_core.strategies.claude import ClaudeLLMStrategy, create_claude_client
+from reckonsys_llm_core import ChatMessage, ThinkingConfig, create_llm
 
-strategy = ClaudeLLMStrategy(
-    client=create_claude_client(),
-    model="claude-opus-4-6",
-)
-client = LLMClient(strategy)
+client = create_llm("claude", "claude-opus-4-6")
 
 # Basic query
 response = client.query(

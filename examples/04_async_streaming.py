@@ -11,18 +11,9 @@ caller before the response is complete.
 
 import asyncio
 
-from reckonsys_llm_core import AsyncLLMClient, ChatMessage, StreamDone, StreamToken
-from reckonsys_llm_core.strategies.claude import (
-    AsyncClaudeLLMStrategy,
-    create_async_claude_client,
-)
+from reckonsys_llm_core import ChatMessage, StreamDone, StreamToken, create_async_llm
 
-client = AsyncLLMClient(
-    AsyncClaudeLLMStrategy(
-        client=create_async_claude_client(),
-        model="claude-opus-4-6",
-    )
-)
+client = create_async_llm("claude", "claude-opus-4-6")
 
 
 async def main() -> None:

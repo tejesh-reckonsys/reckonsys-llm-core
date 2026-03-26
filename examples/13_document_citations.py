@@ -9,14 +9,9 @@ Citations appear in LLMResponse.citations with document_title and document_index
 Requires: ANTHROPIC_API_KEY
 """
 
-from reckonsys_llm_core import ChatMessage, DocumentContent, LLMClient, TextContent
-from reckonsys_llm_core.strategies.claude import ClaudeLLMStrategy, create_claude_client
+from reckonsys_llm_core import ChatMessage, DocumentContent, TextContent, create_llm
 
-strategy = ClaudeLLMStrategy(
-    client=create_claude_client(),
-    model="claude-opus-4-6",
-)
-client = LLMClient(strategy)
+client = create_llm("claude", "claude-opus-4-6")
 
 # ---------------------------------------------------------------------------
 # 1. Single document — ask a question, get citations back

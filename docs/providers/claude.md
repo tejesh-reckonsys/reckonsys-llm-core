@@ -10,6 +10,8 @@ pip install "reckonsys-llm-core[claude]"   # anthropic>=0.84.0
 
 Set `ANTHROPIC_API_KEY` in your environment (or pass it explicitly via `create_claude_client(api_key=...)`).
 
+> **Tip:** For the quickest setup, use the [Client Helpers](../guides/helpers.md) — e.g. `create_llm("claude", "claude-sonnet-4-6")`.
+
 ---
 
 ## Current models
